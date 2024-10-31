@@ -1,0 +1,269 @@
+id,name,iso,region,bureau
+1,Global,,Global,
+2,Antarctica,,Antarctica,
+3,Australia and New Zealand,,Australia and New Zealand,
+4,Central Asia,,Central Asia,
+5,Eastern Asia,,Eastern Asia,
+6,Eastern Europe,,Eastern Europe,
+7,Latin America and the Caribbean,,Latin America and the Caribbean,
+8,Melanesia,,Melanesia,
+9,Micronesia,,Micronesia,
+10,Northern Africa,,Northern Africa,
+11,Northern America,,Northern America,
+12,Northern Europe,,Northern Europe,
+13,Polynesia,,Polynesia,
+14,South-eastern Asia,,South-eastern Asia,
+15,Southern Asia,,Southern Asia,
+16,Southern Europe,,Southern Europe,
+17,Sub-Saharan Africa,,Sub-Saharan Africa,
+18,Western Asia,,Western Asia,
+19,Western Europe,,Western Europe,
+20,Afghanistan,AFG,Southern Asia,RBAP
+21,Albania,ALB,Southern Europe,RBEC
+22,Antarctica,ATA,Antarctica,
+23,Algeria,DZA,Northern Africa,RBAS
+24,American Samoa,ASM,Polynesia,
+25,Andorra,AND,Southern Europe,
+26,Angola,AGO,Sub-Saharan Africa,RBA
+27,Antigua and Barbuda,ATG,Latin America and the Caribbean,RBLAC
+28,Azerbaijan,AZE,Western Asia,RBEC
+29,Argentina,ARG,Latin America and the Caribbean,RBLAC
+30,Australia,AUS,Australia and New Zealand,
+31,Austria,AUT,Western Europe,
+32,Bahamas,BHS,Latin America and the Caribbean,RBLAC
+33,Bahrain,BHR,Western Asia,RBAS
+34,Bangladesh,BGD,Southern Asia,RBAP
+35,Armenia,ARM,Western Asia,RBEC
+36,Barbados,BRB,Latin America and the Caribbean,RBLAC
+37,Belgium,BEL,Western Europe,
+38,Bermuda,BMU,Northern America,
+39,Bhutan,BTN,Southern Asia,RBAP
+40,Bolivia (Plurinational State of),BOL,Latin America and the Caribbean,RBLAC
+41,Bosnia and Herzegovina,BIH,Southern Europe,RBEC
+42,Botswana,BWA,Sub-Saharan Africa,RBA
+43,Bouvet Island,BVT,Latin America and the Caribbean,
+44,Brazil,BRA,Latin America and the Caribbean,RBLAC
+45,Belize,BLZ,Latin America and the Caribbean,RBLAC
+46,British Indian Ocean Territory,IOT,Sub-Saharan Africa,
+47,Solomon Islands,SLB,Melanesia,RBAP
+48,British Virgin Islands,VGB,Latin America and the Caribbean,
+49,Brunei Darussalam,BRN,South-eastern Asia,RBAP
+50,Bulgaria,BGR,Eastern Europe,
+51,Myanmar,MMR,South-eastern Asia,RBAP
+52,Burundi,BDI,Sub-Saharan Africa,RBA
+53,Belarus,BLR,Eastern Europe,RBEC
+54,Cambodia,KHM,South-eastern Asia,RBAP
+55,Cameroon,CMR,Sub-Saharan Africa,RBA
+56,Canada,CAN,Northern America,
+57,Cabo Verde,CPV,Sub-Saharan Africa,RBA
+58,Cayman Islands,CYM,Latin America and the Caribbean,
+59,Central African Republic,CAF,Sub-Saharan Africa,RBA
+60,Sri Lanka,LKA,Southern Asia,RBAP
+61,Chad,TCD,Sub-Saharan Africa,RBA
+62,Chile,CHL,Latin America and the Caribbean,RBLAC
+63,China,CHN,Eastern Asia,RBAP
+64,Christmas Island,CXR,Australia and New Zealand,
+65,Cocos (Keeling) Islands,CCK,Australia and New Zealand,
+66,Colombia,COL,Latin America and the Caribbean,RBLAC
+67,Comoros,COM,Sub-Saharan Africa,RBA
+68,Mayotte,MYT,Sub-Saharan Africa,
+69,Congo,COG,Sub-Saharan Africa,RBA
+70,Democratic Republic of the Congo,COD,Sub-Saharan Africa,RBA
+71,Cook Islands,COK,Polynesia,
+72,Costa Rica,CRI,Latin America and the Caribbean,RBLAC
+73,Croatia,HRV,Southern Europe,
+74,Cuba,CUB,Latin America and the Caribbean,RBLAC
+75,Cyprus,CYP,Western Asia,
+76,Czechia,CZE,Eastern Europe,
+77,Benin,BEN,Sub-Saharan Africa,RBA
+78,Denmark,DNK,Northern Europe,
+79,Dominica,DMA,Latin America and the Caribbean,RBLAC
+80,Dominican Republic,DOM,Latin America and the Caribbean,RBLAC
+81,Ecuador,ECU,Latin America and the Caribbean,RBLAC
+82,El Salvador,SLV,Latin America and the Caribbean,RBLAC
+83,Equatorial Guinea,GNQ,Sub-Saharan Africa,RBA
+84,Ethiopia,ETH,Sub-Saharan Africa,RBA
+85,Eritrea,ERI,Sub-Saharan Africa,RBA
+86,Estonia,EST,Northern Europe,
+87,Faroe Islands,FRO,Northern Europe,
+88,Falkland Islands (Malvinas),FLK,Latin America and the Caribbean,
+89,South Georgia and the South Sandwich Islands,SGS,Latin America and the Caribbean,
+90,Fiji,FJI,Melanesia,RBAP
+91,Finland,FIN,Northern Europe,
+92,Åland Islands,ALA,Northern Europe,
+93,France,FRA,Western Europe,
+94,French Guiana,GUF,Latin America and the Caribbean,
+95,French Polynesia,PYF,Polynesia,
+96,French Southern Territories,ATF,Sub-Saharan Africa,
+97,Djibouti,DJI,Sub-Saharan Africa,RBAS
+98,Gabon,GAB,Sub-Saharan Africa,RBA
+99,Georgia,GEO,Western Asia,RBEC
+100,Gambia,GMB,Sub-Saharan Africa,RBA
+101,State of Palestine,PSE,Western Asia,RBAS
+102,Germany,DEU,Western Europe,
+103,Ghana,GHA,Sub-Saharan Africa,RBA
+104,Gibraltar,GIB,Southern Europe,
+105,Kiribati,KIR,Micronesia,RBAP
+106,Greece,GRC,Southern Europe,
+107,Greenland,GRL,Northern America,
+108,Grenada,GRD,Latin America and the Caribbean,RBLAC
+109,Guadeloupe,GLP,Latin America and the Caribbean,
+110,Guam,GUM,Micronesia,
+111,Guatemala,GTM,Latin America and the Caribbean,RBLAC
+112,Guinea,GIN,Sub-Saharan Africa,RBA
+113,Guyana,GUY,Latin America and the Caribbean,RBLAC
+114,Haiti,HTI,Latin America and the Caribbean,RBLAC
+115,Heard Island and McDonald Islands,HMD,Australia and New Zealand,
+116,Holy See,VAT,Southern Europe,
+117,Honduras,HND,Latin America and the Caribbean,RBLAC
+118,"China, Hong Kong Special Administrative Region",HKG,Eastern Asia,
+119,Hungary,HUN,Eastern Europe,
+120,Iceland,ISL,Northern Europe,
+121,India,IND,Southern Asia,RBAP
+122,Indonesia,IDN,South-eastern Asia,RBAP
+123,Iran (Islamic Republic of),IRN,Southern Asia,RBAP
+124,Iraq,IRQ,Western Asia,RBAS
+125,Ireland,IRL,Northern Europe,
+126,Israel,ISR,Western Asia,
+127,Italy,ITA,Southern Europe,
+128,Côte d’Ivoire,CIV,Sub-Saharan Africa,RBA
+129,Jamaica,JAM,Latin America and the Caribbean,RBLAC
+130,Japan,JPN,Eastern Asia,
+131,Kazakhstan,KAZ,Central Asia,RBEC
+132,Jordan,JOR,Western Asia,RBAS
+133,Kenya,KEN,Sub-Saharan Africa,RBA
+134,Democratic People's Republic of Korea,PRK,Eastern Asia,RBAP
+135,Republic of Korea,KOR,Eastern Asia,
+136,Kuwait,KWT,Western Asia,RBAS
+137,Kyrgyzstan,KGZ,Central Asia,RBEC
+138,Lao People's Democratic Republic,LAO,South-eastern Asia,RBAP
+139,Lebanon,LBN,Western Asia,RBAS
+140,Lesotho,LSO,Sub-Saharan Africa,RBA
+141,Latvia,LVA,Northern Europe,
+142,Liberia,LBR,Sub-Saharan Africa,RBA
+143,Libya,LBY,Northern Africa,RBAS
+144,Liechtenstein,LIE,Western Europe,
+145,Lithuania,LTU,Northern Europe,
+146,Luxembourg,LUX,Western Europe,
+147,"China, Macao Special Administrative Region",MAC,Eastern Asia,
+148,Madagascar,MDG,Sub-Saharan Africa,RBA
+149,Malawi,MWI,Sub-Saharan Africa,RBA
+150,Malaysia,MYS,South-eastern Asia,RBAP
+151,Maldives,MDV,Southern Asia,RBAP
+152,Mali,MLI,Sub-Saharan Africa,RBA
+153,Malta,MLT,Southern Europe,
+154,Martinique,MTQ,Latin America and the Caribbean,
+155,Mauritania,MRT,Sub-Saharan Africa,RBA
+156,Mauritius,MUS,Sub-Saharan Africa,RBA
+157,Mexico,MEX,Latin America and the Caribbean,RBLAC
+158,Monaco,MCO,Western Europe,
+159,Mongolia,MNG,Eastern Asia,RBAP
+160,Republic of Moldova,MDA,Eastern Europe,RBEC
+161,Montenegro,MNE,Southern Europe,RBEC
+162,Montserrat,MSR,Latin America and the Caribbean,
+163,Morocco,MAR,Northern Africa,RBAS
+164,Mozambique,MOZ,Sub-Saharan Africa,RBA
+165,Oman,OMN,Western Asia,RBAS
+166,Namibia,NAM,Sub-Saharan Africa,RBA
+167,Nauru,NRU,Micronesia,RBAP
+168,Nepal,NPL,Southern Asia,RBAP
+169,Netherlands (Kingdom of the),NLD,Western Europe,
+170,Curaçao,CUW,Latin America and the Caribbean,
+171,Aruba,ABW,Latin America and the Caribbean,
+172,Sint Maarten (Dutch part),SXM,Latin America and the Caribbean,
+173,"Bonaire, Sint Eustatius and Saba",BES,Latin America and the Caribbean,
+174,New Caledonia,NCL,Melanesia,
+175,Vanuatu,VUT,Melanesia,RBAP
+176,New Zealand,NZL,Australia and New Zealand,
+177,Nicaragua,NIC,Latin America and the Caribbean,RBLAC
+178,Niger,NER,Sub-Saharan Africa,RBA
+179,Nigeria,NGA,Sub-Saharan Africa,RBA
+180,Niue,NIU,Polynesia,
+181,Norfolk Island,NFK,Australia and New Zealand,
+182,Norway,NOR,Northern Europe,
+183,Northern Mariana Islands,MNP,Micronesia,
+184,United States Minor Outlying Islands,UMI,Micronesia,
+185,Micronesia (Federated States of),FSM,Micronesia,RBAP
+186,Marshall Islands,MHL,Micronesia,RBAP
+187,Palau,PLW,Micronesia,RBAP
+188,Pakistan,PAK,Southern Asia,RBAP
+189,Panama,PAN,Latin America and the Caribbean,RBLAC
+190,Papua New Guinea,PNG,Melanesia,RBAP
+191,Paraguay,PRY,Latin America and the Caribbean,RBLAC
+192,Peru,PER,Latin America and the Caribbean,RBLAC
+193,Philippines,PHL,South-eastern Asia,RBAP
+194,Pitcairn,PCN,Polynesia,
+195,Poland,POL,Eastern Europe,
+196,Portugal,PRT,Southern Europe,
+197,Guinea-Bissau,GNB,Sub-Saharan Africa,RBA
+198,Timor-Leste,TLS,South-eastern Asia,RBAP
+199,Puerto Rico,PRI,Latin America and the Caribbean,
+200,Qatar,QAT,Western Asia,RBAS
+201,Réunion,REU,Sub-Saharan Africa,
+202,Romania,ROU,Eastern Europe,
+203,Russian Federation,RUS,Eastern Europe,
+204,Rwanda,RWA,Sub-Saharan Africa,RBA
+205,Saint Barthélemy,BLM,Latin America and the Caribbean,
+206,Saint Helena,SHN,Sub-Saharan Africa,
+207,Saint Kitts and Nevis,KNA,Latin America and the Caribbean,RBLAC
+208,Anguilla,AIA,Latin America and the Caribbean,
+209,Saint Lucia,LCA,Latin America and the Caribbean,RBLAC
+210,Saint Martin (French Part),MAF,Latin America and the Caribbean,
+211,Saint Pierre and Miquelon,SPM,Northern America,
+212,Saint Vincent and the Grenadines,VCT,Latin America and the Caribbean,RBLAC
+213,San Marino,SMR,Southern Europe,
+214,Sao Tome and Principe,STP,Sub-Saharan Africa,RBA
+215,Sark,CRQ,Northern Europe,
+216,Saudi Arabia,SAU,Western Asia,RBAS
+217,Senegal,SEN,Sub-Saharan Africa,RBA
+218,Serbia,SRB,Southern Europe,RBEC
+219,Seychelles,SYC,Sub-Saharan Africa,RBA
+220,Sierra Leone,SLE,Sub-Saharan Africa,RBA
+221,Singapore,SGP,South-eastern Asia,RBAP
+222,Slovakia,SVK,Eastern Europe,
+223,Viet Nam,VNM,South-eastern Asia,RBAP
+224,Slovenia,SVN,Southern Europe,
+225,Somalia,SOM,Sub-Saharan Africa,RBAS
+226,South Africa,ZAF,Sub-Saharan Africa,RBA
+227,Zimbabwe,ZWE,Sub-Saharan Africa,RBA
+228,Spain,ESP,Southern Europe,
+229,South Sudan,SSD,Sub-Saharan Africa,RBA
+230,Sudan,SDN,Northern Africa,RBAS
+231,Western Sahara,ESH,Northern Africa,
+232,Suriname,SUR,Latin America and the Caribbean,RBLAC
+233,Svalbard and Jan Mayen Islands,SJM,Northern Europe,
+234,Eswatini,SWZ,Sub-Saharan Africa,RBA
+235,Sweden,SWE,Northern Europe,
+236,Switzerland,CHE,Western Europe,
+237,Syrian Arab Republic,SYR,Western Asia,RBAS
+238,Tajikistan,TJK,Central Asia,RBEC
+239,Thailand,THA,South-eastern Asia,RBAP
+240,Togo,TGO,Sub-Saharan Africa,RBA
+241,Tokelau,TKL,Polynesia,
+242,Tonga,TON,Polynesia,RBAP
+243,Trinidad and Tobago,TTO,Latin America and the Caribbean,RBLAC
+244,United Arab Emirates,ARE,Western Asia,RBAS
+245,Tunisia,TUN,Northern Africa,RBAS
+246,Türkiye,TUR,Western Asia,RBEC
+247,Turkmenistan,TKM,Central Asia,RBEC
+248,Turks and Caicos Islands,TCA,Latin America and the Caribbean,
+249,Tuvalu,TUV,Polynesia,RBAP
+250,Uganda,UGA,Sub-Saharan Africa,RBA
+251,Ukraine,UKR,Eastern Europe,RBEC
+252,North Macedonia,MKD,Southern Europe,RBEC
+253,Egypt,EGY,Northern Africa,RBAS
+254,United Kingdom of Great Britain and Northern Ireland,GBR,Northern Europe,
+255,Guernsey,GGY,Northern Europe,
+256,Jersey,JEY,Northern Europe,
+257,Isle of Man,IMN,Northern Europe,
+258,United Republic of Tanzania,TZA,Sub-Saharan Africa,RBA
+259,United States of America,USA,Northern America,
+260,United States Virgin Islands,VIR,Latin America and the Caribbean,
+261,Burkina Faso,BFA,Sub-Saharan Africa,RBA
+262,Uruguay,URY,Latin America and the Caribbean,RBLAC
+263,Uzbekistan,UZB,Central Asia,RBEC
+264,Venezuela (Bolivarian Republic of),VEN,Latin America and the Caribbean,RBLAC
+265,Wallis and Futuna Islands,WLF,Polynesia,
+266,Samoa,WSM,Polynesia,RBAP
+267,Yemen,YEM,Western Asia,RBAS
+268,Zambia,ZMB,Sub-Saharan Africa,RBA

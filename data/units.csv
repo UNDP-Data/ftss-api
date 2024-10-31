@@ -1,0 +1,201 @@
+id,name,region
+1,Afghanistan,RBAP
+2,Albania,RBEC
+3,Algeria,RBAS
+4,Angola,RBA
+5,Anguilla,RBLAC
+6,Antigua and Barbuda,RBLAC
+7,Argentina,RBLAC
+8,Armenia,RBEC
+9,Aruba,RBLAC
+10,Azerbaijan,RBEC
+11,Bureau of External Relations and Advocacy (BERA),HQ
+12,BMS,HQ
+13,Bureau for Policy and Programme Support (BPPS),HQ
+14,Bahrain,RBAS
+15,Bangladesh,RBAP
+16,Barbados,RBLAC
+17,Belize,RBLAC
+18,Benin,RBA
+19,Bermuda,RBLAC
+20,Bhutan,RBAP
+21,Bolivia,RBLAC
+22,Bosnia and Herzegovina,RBEC
+23,Botswana,RBA
+24,Brazil,RBLAC
+25,Brunei Darussalam,RBAP
+26,Burkina Faso,RBA
+27,Burundi,RBA
+28,Cambodia,RBAP
+29,Cameroon,RBA
+30,Cayman Islands,RBLAC
+31,Central African Republic,RBA
+32,Chad,RBA
+33,Chief Digital Office,HQ
+34,Chief Digital Office (CDO),HQ
+35,Chile,RBLAC
+36,China,RBAP
+37,Colombia,RBLAC
+38,Comoros,RBA
+39,Congo,RBA
+40,Cook Islands,RBAP
+41,Costa Rica,RBLAC
+42,Crisis Bureau (CB),HQ
+43,Cuba,RBLAC
+44,Curacao and Sint Maarten,RBLAC
+45,Cyprus (project office),RBEC
+46,Côte d’Ivoire,RBA
+47,DPRK,RBAP
+48,Democratic Republic of Congo,RBA
+49,Development financing,HQ
+50,Djibouti,RBAS
+51,Dom. Republic,RBLAC
+52,Ecuador,RBLAC
+53,Egypt,RBAS
+54,El Salvador,RBLAC
+55,Equatorial Guinea,RBA
+56,Eritrea,RBA
+57,Eswatini,RBA
+58,Ethiopia,RBA
+59,Executive Office (ExO),HQ
+60,External,Other
+61,Federated States of Micronesia,RBAP
+62,Fiji MCO,RBAP
+63,Future Fellows,HQ
+64,Gabon,RBA
+65,Gambia,RBA
+66,Georgia,RBEC
+67,Ghana,RBA
+68,"Global Centre for Technology, Innovation and Sustainable Development (Singapore)",BPPS
+69,Grenada,RBLAC
+70,Guatemala,RBLAC
+71,Guinea,RBA
+72,Guinea-Bissau,RBA
+73,Guyana,RBLAC
+74,Guyana-Suriname,RBLAC
+75,Haiti,RBLAC
+76,Honduras,RBLAC
+77,Human Development Report Office (HDRO),HQ
+78,Independent Evaluation Office (IEO),HQ
+79,India,RBAP
+80,Indonesia,RBAP
+81,Iran,RBAP
+82,Iraq,RBAS
+83,"Istanbul International Center for Private Sector in Development (Istanbul, Turkey)",BPPS
+84,Jamaica,RBLAC
+85,Jordan,RBAS
+86,Kazakhstan,RBEC
+87,Kenya,RBA
+88,Kiribati,RBAP
+89,Kosovo (as per UNSCR 1244),RBEC
+90,Kuwait,RBAS
+91,Kyrgyzstan,RBEC
+92,Lao PDR,RBAP
+93,Lebanon,RBAS
+94,Lesotho,RBA
+95,Liberia,RBA
+96,Libya,RBAS
+97,Madagascar,RBA
+98,Malawi,RBA
+99,Malaysia MCO,RBAP
+100,Maldives,RBAP
+101,Mali,RBA
+102,Marshall Islands,RBAP
+103,Mauritania,RBA
+104,Mauritius,RBA
+105,Mexico,RBLAC
+106,Moldova,RBEC
+107,Mongolia,RBAP
+108,Montserrat,RBLAC
+109,Morocco,RBAS
+110,Mozambique,RBA
+111,Myanmar,RBAP
+112,"Nairobi Global Centre on Resilient Ecosystems and Desertification (Nairobi, Kenya)",BPPS
+113,Namibia,RBA
+114,Nauru,RBAP
+115,Nepal,RBAP
+116,Nicaragua,RBLAC
+117,Niger,RBA
+118,Nigeria,RBA
+119,Niue,RBAP
+120,North Macedonia,RBEC
+121,Office of Audit and Investigations (OAI),HQ
+122,"Oslo Governance Centre (Oslo, Norway)",BPPS
+123,PNG,RBAP
+124,Pakistan,RBAP
+125,Palau,RBAP
+126,Panama,RBLAC
+127,Paraguay,RBLAC
+128,People,RBAS
+129,Peru,RBLAC
+130,Philippines,RBAP
+131,Prog for Palestinian,RBAS
+132,"Regional Bureau for Africa, New York, USA",HQ
+133,"Regional Bureau for Arab States, New York, USA",HQ
+134,"Regional Bureau for Asia and the Pacific, New York",HQ
+135,"Regional Bureau for Europe and the CIS, New York, USA",HQ
+136,"Regional Bureau for Latin America and the Caribbean, New York, USA",HQ
+137,"Regional Centre: Panama City, Panama",RBLAC
+138,"Regional Hub: Amman, Jordan",RBAS
+139,"Regional Hub: Bangkok, Thailand",RBAP
+140,"Regional Hub: Dakar, Senegal",RBA
+141,"Regional Hub: Istanbul, Turkey",RBEC
+142,"Regional Hub: Nairobi, Kenya",RBA
+143,"Regional Hub: Pretoria, South Africa",RBA
+144,"Regional Service Centre: Addis Ababa, Ethiopia",RBA
+145,Republic of Belarus,RBEC
+146,Republic of Cape Verde,RBA
+147,Republic of Montenegro,RBEC
+148,Republic of South Sudan,RBA
+149,Republic of the,RBAS
+150,Republic of the Sudan,RBAS
+151,Rwanda,RBA
+152,Saint Kitts and Nevis,RBLAC
+153,Saint Lucia and Saint Vincent,RBLAC
+154,Samoa MCO,RBAP
+155,Sao Tome and Principe,RBA
+156,Saudi Arabia,RBAS
+157,Senegal,RBA
+158,Serbia,RBEC
+159,Seychelles,RBA
+160,Sierra Leone,RBA
+161,Singapore,RBAP
+162,Solomon Islands,RBAP
+163,Somalia,RBAS
+164,South Africa,RBA
+165,Sri Lanka,RBAP
+166,Suriname,RBLAC
+167,Syria,RBAS
+168,Tajikistan,RBEC
+169,Tanzania,RBA
+170,Thailand,RBAP
+171,The Bahamas,RBLAC
+172,Timor Leste,RBAP
+173,Togo,RBA
+174,Tokelau,RBAP
+175,Tonga,RBAP
+176,Trinidad & Tobago,RBLAC
+177,Tunisia,RBAS
+178,Turkey,RBEC
+179,Turkmenistan,RBEC
+180,Turks and Caicos Islands,RBLAC
+181,Tuvalu,RBAP
+182,"UNDP Nordic Representation Office (Copenhagen, Denmark)",BERA
+183,"UNDP Office in Geneva (Geneva, Switzerland)",BERA
+184,"UNDP Representation Office in Brussels (Brussels, Belgium)",BERA
+185,"UNDP Representation Office in Japan (Tokyo, Japan)",BERA
+186,"UNDP Seoul Policy Centre for Knowledge Exchange through SDG Partnerships (Seoul, Republic of Korea)",BPPS
+187,"UNDP Washington Representation Office (Washington, USA)",BERA
+188,Uganda,RBA
+189,Ukraine,RBEC
+190,Uruguay,RBLAC
+191,Uzbekistan,RBEC
+192,Vanuatu,RBAP
+193,Venezuela,RBLAC
+194,Viet Nam,RBAP
+195,Yemen,RBAS
+196,Zambia,RBA
+197,Zimbabwe,RBA
+198,the British Virgin Islands,RBLAC
+199,the Commonwealth of Dominica,RBLAC
+200,the Grenadines,RBLAC
