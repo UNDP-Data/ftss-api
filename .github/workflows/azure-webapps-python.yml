@@ -1,0 +1,52 @@
+# This workflow conditionally deploys the application to either a staging or production environment,
+# depending on the branch that triggers it.
+
+name: Build and deploy Python app to Azure Web App
+
+env:
+  PYTHON_VERSION: '3.11'
+
+on:
+  push:
+    branches:
+      - main
+      - dev
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python version
+        uses: actions/setup-python@v3
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+
+      - name: Create and start virtual environment
+        run: |
+          python -m venv venv
+          source venv/bin/activate
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: 'Deploy to Azure Web App - Staging'
+        if: github.ref == 'refs/heads/dev'
+        uses: azure/webapps-deploy@v2
+        with:
+          app-name: 'ftss-api-dev'
+          publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE_DEV }}
+
+      - name: 'Deploy to Azure Web App - Production'
+        if: github.ref == 'refs/heads/main'
+        uses: azure/webapps-deploy@v2
+        with:
+          app-name: 'ftss-api'
+          publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE_MAIN }}
