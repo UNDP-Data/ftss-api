@@ -4,17 +4,27 @@ services:
       context: .
     env_file: .env
     environment:
-      - DB_CONNECTION=postgresql://postgres:password@db:5432/postgres
+      - DB_CONNECTION=postgresql://postgres:password@db:5432/futures
     ports:
-      - "8000:8000"
+      - 5203:5203
+    volumes:
+      - .:/app
     depends_on:
       - db
+    command: >
+      sh -c "uvicorn main:app --host 0.0.0.0 --port 5203 --reload --reload-dir /app"
   db:
     image: postgres:16.4-alpine
     environment:
-      POSTGRES_PASSWORD: password
+      - POSTGRES_PASSWORD=password
+      - POSTGRES_DB=futures
     ports:
-      - "5432:5432"
+      - 5432:5432
     volumes:
       - ./sql:/docker-entrypoint-initdb.d
       - ./data:/docker-entrypoint-initdb.d/data
+  adminer:
+    image: adminer
+    restart: always
+    ports:
+      - 4040:8080
