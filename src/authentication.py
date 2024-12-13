@@ -130,9 +130,11 @@ async def authenticate_user(
         Pydantic model for a User object (if authentication succeeded).
     """
     if token == os.environ.get("API_KEY"):
-        # dummy user object for anonymous access
-        user = User(email="name.surname@undp.org", role=Role.VISITOR)
-        return user
+        if os.environ.get("ENV") == "dev":
+            return User(email="name.surname@undp.org", role=Role.ADMIN)
+        else:
+            # dummy user object for anonymous access
+            return User(email="name.surname@undp.org", role=Role.VISITOR)
     try:
         payload = await decode_token(token)
     except jwt.exceptions.PyJWTError as e:

@@ -140,3 +140,5 @@ cython_debug/
 # Manually added for this project
 .idea/
 **/.DS_Store
+Makefile
+sql/create_test_user.sql
