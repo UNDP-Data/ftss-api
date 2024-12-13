@@ -8,6 +8,8 @@ import pandas as pd
 from fastapi import APIRouter, Depends, Path, Query
 from psycopg import AsyncCursor
 
+from src.services import news_api
+
 from .. import database as db
 from .. import exceptions, genai, utils
 from ..authentication import authenticate_user
@@ -93,6 +95,16 @@ async def create_signal(
     signal_id = await db.create_signal(cursor, signal)
     return await db.read_signal(cursor, signal_id)
 
+
+@router.get("/autocomplete", response_model=list[dict])
+async def autocomplete_signal(
+    query: str = Query(),
+    user: User = Depends(authenticate_user),
+):
+    """
+    Get article suggestions converted to simplified signal dictionaries.
+    """
+    return news_api.autocomplete(query)
 
 @router.get("/me", response_model=list[Signal])
 async def read_my_signals(
