@@ -15,3 +15,4 @@ beautifulsoup4 ~= 4.12.3
 lxml ~= 5.3.0
 openai == 1.52.2
 newsapi-python ~= 0.2.7
+worldnewsapi ~= 2.0.0
