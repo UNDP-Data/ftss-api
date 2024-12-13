@@ -2,8 +2,8 @@
 Database operations for user favorites.
 """
 
-from datetime import datetime
 import logging
+from datetime import datetime
 
 from fastapi import HTTPException
 from psycopg import AsyncCursor
@@ -12,11 +12,12 @@ from ..entities import Signal
 
 logger = logging.getLogger(__name__)
 
+
 async def create_favourite(
     cursor: AsyncCursor, user_email: str, signal_id: int
 ) -> dict:
     logger.debug("Creating/removing favourite for signal_id: %s", signal_id)
-    
+
     # First check if the signal exists
     query = """
         SELECT s.*, COALESCE(array_agg(c.trend_id) FILTER (WHERE c.trend_id IS NOT NULL), ARRAY[]::integer[]) as connected_trends
@@ -25,11 +26,11 @@ async def create_favourite(
         WHERE s.id = %s
         GROUP BY s.id;
     """
-    
+
     await cursor.execute(query, (signal_id,))
     signal = await cursor.fetchone()
     logger.debug("Found signal: %s", signal)
-    
+
     if signal is None:
         logger.warning("Signal not found with id: %s", signal_id)
         raise HTTPException(status_code=404, detail="Signal not found")

@@ -2,8 +2,8 @@
 A router for managing user's favorite signals.
 """
 
-from typing import Literal
 import logging
+from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException
 from psycopg import AsyncCursor
@@ -47,10 +47,10 @@ async def create_or_remove_favourite(
     try:
         signal = await db.read_signal(cursor, signal_id)
         logger.debug("Found signal for favourite operation: %s", signal)
-        
+
         if signal:
             return await db.create_favourite(cursor, user.email, signal_id)
-        
+
         logger.warning("Signal not found with id: %s", signal_id)
         raise HTTPException(status_code=404, detail="Signal not found")
     except Exception as e:
