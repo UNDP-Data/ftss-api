@@ -4,9 +4,11 @@ Database operations for user favorites.
 
 import logging
 from datetime import datetime
+from typing import cast
 
 from fastapi import HTTPException
 from psycopg import AsyncCursor
+from psycopg.rows import DictRow
 
 from ..entities import Signal
 
@@ -14,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 
 async def create_favourite(
-    cursor: AsyncCursor, user_email: str, signal_id: int
+    cursor: AsyncCursor[DictRow], user_email: str, signal_id: int
 ) -> dict:
     logger.debug("Creating/removing favourite for signal_id: %s", signal_id)
 
@@ -28,10 +30,10 @@ async def create_favourite(
     """
 
     await cursor.execute(query, (signal_id,))
-    signal = await cursor.fetchone()
-    logger.debug("Found signal: %s", signal)
+    signal_row = cast(DictRow | None, await cursor.fetchone())
+    logger.debug("Found signal: %s", signal_row)
 
-    if signal is None:
+    if signal_row is None:
         logger.warning("Signal not found with id: %s", signal_id)
         raise HTTPException(status_code=404, detail="Signal not found")
 
@@ -40,45 +42,40 @@ async def create_favourite(
         SELECT id FROM users WHERE email = %s;
     """
     await cursor.execute(query, (user_email,))
-    user = await cursor.fetchone()
+    user_row = cast(DictRow | None, await cursor.fetchone())
 
-    if user is None:
+    if user_row is None:
         raise HTTPException(
             status_code=404, detail="User not found with email " + user_email
         )
-    user_id = user["id"]
+    user_id = user_row["id"]
 
-    # Check if the signal is already favorited
+    # Check if the favorite already exists
     query = """
         SELECT 1 FROM favourites WHERE user_id = %s AND signal_id = %s;
     """
     await cursor.execute(query, (user_id, signal_id))
-    favourite = await cursor.fetchone()
+    exists = await cursor.fetchone()
 
-    if favourite is not None:
-        # delete the favorite
+    if exists:
+        # Remove the favorite
         query = """
             DELETE FROM favourites WHERE user_id = %s AND signal_id = %s;
         """
         await cursor.execute(query, (user_id, signal_id))
         return {"status": "deleted"}
-
-    # Then create the favorite
-    query = """
-        INSERT INTO favourites (user_id, signal_id, created_at)
-        VALUES (%s, %s, %s)
-        RETURNING signal_id;
-    """
-    await cursor.execute(query, (user_id, signal_id, datetime.utcnow()))
-    result = await cursor.fetchone()
-
-    if result is None:
-        raise HTTPException(status_code=404, detail="Failed to create favourite")
-
-    return {"status": "created"}
+    else:
+        # Add to favorites
+        query = """
+            INSERT INTO favourites (user_id, signal_id, created_at)
+            VALUES (%s, %s, %s)
+            ON CONFLICT (user_id, signal_id) DO NOTHING;
+        """
+        await cursor.execute(query, (user_id, signal_id, datetime.utcnow()))
+        return {"status": "created"}
 
 
-async def read_user_favourites(cursor: AsyncCursor, user_email: str) -> list[Signal]:
+async def read_user_favourites(cursor: AsyncCursor[DictRow], user_email: str) -> list[Signal]:
     query = """
         SELECT s.*, COALESCE(array_agg(c.trend_id) FILTER (WHERE c.trend_id IS NOT NULL), ARRAY[]::integer[]) as connected_trends
         FROM signals s
@@ -90,4 +87,5 @@ async def read_user_favourites(cursor: AsyncCursor, user_email: str) -> list[Sig
         ORDER BY f.created_at DESC;
     """
     await cursor.execute(query, (user_email,))
-    return [Signal(**row) async for row in cursor]
+    rows = await cursor.fetchall()
+    return [Signal.model_validate(cast(DictRow, row)) for row in rows]
