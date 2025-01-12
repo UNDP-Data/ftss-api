@@ -141,3 +141,4 @@ cython_debug/
 .idea/
 **/.DS_Store
 sql/create_test_user.sql
+Taskfile.yml
