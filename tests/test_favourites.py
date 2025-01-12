@@ -344,3 +344,35 @@ def test_favourite_signal_updates(headers_with_jwt: dict, created_signal: Dict[s
     favorite_signal = Signal.model_validate(favorites[0])
     assert favorite_signal.headline == "Updated Headline"
     assert favorite_signal.description == "Updated Description"
+
+def test_favourite_status_in_signal_response(headers_with_jwt: dict, created_signal: Dict[str, Any]):
+    """Test that signal responses include correct favorite status."""
+    signal_id = created_signal['id']
+    
+    # Initially signal should not be favorited
+    response = client.get(f"/signals/{signal_id}", headers=headers_with_jwt)
+    assert response.status_code == 200
+    signal_data = response.json()
+    assert signal_data["favorite"] is False
+    
+    # Add to favorites
+    response = client.post(f"/favourites/{signal_id}", headers=headers_with_jwt)
+    assert response.status_code == 200
+    assert response.json()["status"] == "created"
+    
+    # Signal should now show as favorited
+    response = client.get(f"/signals/{signal_id}", headers=headers_with_jwt)
+    assert response.status_code == 200
+    signal_data = response.json()
+    assert signal_data["favorite"] is True
+    
+    # Remove from favorites
+    response = client.post(f"/favourites/{signal_id}", headers=headers_with_jwt)
+    assert response.status_code == 200
+    assert response.json()["status"] == "deleted"
+    
+    # Signal should no longer show as favorited
+    response = client.get(f"/signals/{signal_id}", headers=headers_with_jwt)
+    assert response.status_code == 200
+    signal_data = response.json()
+    assert signal_data["favorite"] is False

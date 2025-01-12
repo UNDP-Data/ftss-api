@@ -3,6 +3,7 @@ Logging configuration for the application.
 """
 
 import logging
+import os
 import sys
 from typing import Optional
 
@@ -14,9 +15,9 @@ def setup_logging(level: Optional[str] = None) -> None:
     Args:
         level: The logging level to use. If None, defaults to INFO.
     """
-    log_level = getattr(logging, (level or "INFO").upper())
+    log_level = getattr(logging, (level or os.getenv("LOGGING_LEVEL") or "INFO").upper())
 
-    # Configure the root logger
+    # Configure the root logger 
     logging.basicConfig(
         level=log_level,
         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",

@@ -58,24 +58,37 @@ async def create_favourite(
     exists = await cursor.fetchone()
 
     if exists:
+        logger.debug("Deleting favourite for signal_id: %s", signal_id)
         # Remove the favorite
         query = """
             DELETE FROM favourites WHERE user_id = %s AND signal_id = %s;
         """
-        await cursor.execute(query, (user_id, signal_id))
-        return {"status": "deleted"}
+        try:
+            await cursor.execute(query, (user_id, signal_id))
+            logger.debug("Deleted favourite for signal_id: %s", signal_id)
+            return {"status": "deleted"}
+        except Exception as e:
+            logger.error("Error deleting favourite for signal_id: %s", signal_id, exc_info=True)
+            raise e
     else:
+        logger.debug("Adding favourite for signal_id: %s", signal_id)
         # Add to favorites
         query = """
             INSERT INTO favourites (user_id, signal_id, created_at)
             VALUES (%s, %s, %s)
             ON CONFLICT (user_id, signal_id) DO NOTHING;
         """
-        await cursor.execute(query, (user_id, signal_id, datetime.utcnow()))
-        return {"status": "created"}
+        try:
+            await cursor.execute(query, (user_id, signal_id, datetime.utcnow()))
+            logger.debug("Added favourite for signal_id: %s", signal_id)
+            return {"status": "created"}
+        except Exception as e:
+            logger.error("Error adding favourite for signal_id: %s", signal_id, exc_info=True)
+            raise e
 
 
 async def read_user_favourites(cursor: AsyncCursor[DictRow], user_email: str) -> list[Signal]:
+    logger.debug("Reading user favourites for user_email: %s", user_email)
     query = """
         SELECT s.*, COALESCE(array_agg(c.trend_id) FILTER (WHERE c.trend_id IS NOT NULL), ARRAY[]::integer[]) as connected_trends
         FROM signals s
@@ -88,4 +101,5 @@ async def read_user_favourites(cursor: AsyncCursor[DictRow], user_email: str) ->
     """
     await cursor.execute(query, (user_email,))
     rows = await cursor.fetchall()
+    logger.debug("Fetched %s rows", len(rows))
     return [Signal.model_validate(cast(DictRow, row)) for row in rows]

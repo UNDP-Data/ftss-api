@@ -130,7 +130,7 @@ async def authenticate_user(
     user : User
         Pydantic model for a User object (if authentication succeeded).
     """
-    logging.info(f"Authenticating user with token: {token}")
+    logging.debug(f"Authenticating user with token")
     if os.environ.get("TEST_USER_TOKEN"): 
         token = os.environ.get("TEST_USER_TOKEN")
     if os.environ.get("ENV_MODE") == "local":

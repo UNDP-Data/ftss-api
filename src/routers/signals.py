@@ -2,6 +2,7 @@
 A router for retrieving, submitting and updating signals.
 """
 
+import logging
 from typing import Annotated
 
 import pandas as pd
@@ -13,6 +14,8 @@ from .. import exceptions, genai, utils
 from ..authentication import authenticate_user
 from ..dependencies import require_creator, require_curator, require_user
 from ..entities import Role, Signal, SignalFilters, SignalPage, Status, User
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/signals", tags=["signals"])
 
@@ -116,10 +119,29 @@ async def read_signal(
     Retrieve a signal form the database using an ID. Trends connected to the signal
     can be retrieved using IDs from the `signal.connected_trends` field.
     """
+    logger.info("Reading signal with ID: %s for user: %s", uid, user.email)
+    
     if (signal := await db.read_signal(cursor, uid)) is None:
+        logger.warning("Signal not found with ID: %s", uid)
         raise exceptions.not_found
+        
+    logger.info("Retrieved signal: %s", signal.model_dump())
+    
     if user.role == Role.VISITOR and signal.status != Status.APPROVED:
+        logger.warning(
+            "Permission denied - visitor trying to access non-approved signal. Status: %s",
+            signal.status
+        )
         raise exceptions.permission_denied
+    
+    # Check if the signal is favorited by the user
+    logger.info("Checking favorite status for signal %s and user %s", uid, user.email)
+    is_favorite = await db.is_signal_favorited(cursor, user.email, uid)
+    logger.info("Favorite status result: %s", is_favorite)
+    
+    signal.favorite = is_favorite
+    logger.info("Final signal with favorite status: %s", signal.model_dump())
+    
     return signal
 
 

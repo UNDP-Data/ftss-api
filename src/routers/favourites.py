@@ -7,6 +7,7 @@ from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException
 from psycopg import AsyncCursor
+from psycopg.rows import DictRow
 from pydantic import BaseModel
 
 from .. import database as db
@@ -39,7 +40,7 @@ def get_user():
 async def create_or_remove_favourite(
     signal_id: int,
     user: User = Depends(require_user),
-    cursor: AsyncCursor = Depends(db.yield_cursor),
+    cursor: AsyncCursor[DictRow] = Depends(db.yield_cursor),
 ) -> dict:
     """
     Add or remove a signal from user's favorites depending on current status.
@@ -61,7 +62,7 @@ async def create_or_remove_favourite(
 @router.get("/", response_model=list[Signal])
 async def fetch_user_favourites(
     user: User = Depends(require_user),
-    cursor: AsyncCursor = Depends(db.yield_cursor),
+    cursor: AsyncCursor[DictRow] = Depends(db.yield_cursor),
 ) -> list[Signal]:
     """
     Get all signals that the current user has favorited, in chronological order

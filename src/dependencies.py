@@ -25,11 +25,11 @@ __all__ = [
 
 async def require_admin(user: User = Depends(authenticate_user)) -> User:
     """Require that the user is assigned an admin role."""
-    logger.debug(f"Checking admin permissions for user {user.email} with role {user.role}")
+    logger.info(f"Checking admin permissions for user {user.email} with role {user.role}")
     if not user.is_admin:
         logger.warning(f"Permission denied: User {user.email} with role {user.role} attempted admin action")
         raise exceptions.permission_denied
-    logger.debug(f"Admin permission granted for user {user.email}")
+    logger.info(f"Admin permission granted for user {user.email}")
     return user
 
 
