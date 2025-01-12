@@ -2,6 +2,7 @@
 Dependencies for API authentication using JWT tokens from Microsoft Entra.
 """
 
+import logging
 import os
 
 import httpx
@@ -129,6 +130,24 @@ async def authenticate_user(
     user : User
         Pydantic model for a User object (if authentication succeeded).
     """
+    logging.info(f"Authenticating user with token: {token}")
+    if os.environ.get("TEST_USER_TOKEN"): 
+        token = os.environ.get("TEST_USER_TOKEN")
+    if os.environ.get("ENV_MODE") == "local":
+        # defaul user data
+        user_data = {
+            "email": "test.user@undp.org",
+            "name": "Test User",
+            "unit": "Data Futures Exchange (DFx)",
+            "acclab": False,
+        }
+        if token == "test-admin-token":
+            user_data["role"] = Role.ADMIN
+            return User(**user_data)
+        elif token == "test-user-token":
+            user_data["role"] = Role.USER
+            return User(**user_data)
+
     if token == os.environ.get("API_KEY"):
         # dummy user object for anonymous access
         user = User(email="name.surname@undp.org", role=Role.VISITOR)

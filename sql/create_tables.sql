@@ -24,11 +24,13 @@ CREATE TABLE users (
 	role VARCHAR(255) NOT NULL,
 	name VARCHAR(255),
 	unit  VARCHAR(255),
-    acclab BOOLEAN
+    acclab BOOLEAN,
+    api_key VARCHAR(255) UNIQUE
 );
 
 CREATE INDEX ON users (email);
 CREATE INDEX ON users (role);
+CREATE INDEX ON users (api_key);
 
 -- signals table and indices
 CREATE TABLE signals (

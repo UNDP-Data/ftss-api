@@ -140,3 +140,4 @@ cython_debug/
 # Manually added for this project
 .idea/
 **/.DS_Store
+Taskfile.yml
