@@ -24,11 +24,13 @@ CREATE TABLE users (
 	role VARCHAR(255) NOT NULL,
 	name VARCHAR(255),
 	unit  VARCHAR(255),
-    acclab BOOLEAN
+    acclab BOOLEAN,
+    api_key VARCHAR(255) UNIQUE
 );
 
 CREATE INDEX ON users (email);
 CREATE INDEX ON users (role);
+CREATE INDEX ON users (api_key);
 
 -- signals table and indices
 CREATE TABLE signals (
@@ -117,6 +119,19 @@ CREATE TABLE connections (
 	created_by VARCHAR(255) NOT NULL,
 	CONSTRAINT connection_pk PRIMARY KEY (signal_id, trend_id)
 );
+
+-- favourites table to track user's favourite signals
+CREATE TABLE favourites (
+    user_id INT REFERENCES users(id) ON DELETE CASCADE,
+    signal_id INT REFERENCES signals(id) ON DELETE CASCADE,
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    CONSTRAINT favourites_pk PRIMARY KEY (user_id, signal_id)
+);
+
+CREATE INDEX ON favourites (user_id, created_at);
+
+CREATE INDEX favourites_user_signal_idx ON favourites (user_id, signal_id);
+CREATE INDEX favourites_created_at_idx ON favourites (created_at DESC);
 
 -- locations table and indices
 CREATE TABLE locations (

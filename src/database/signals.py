@@ -14,6 +14,7 @@ __all__ = [
     "update_signal",
     "delete_signal",
     "read_user_signals",
+    "is_signal_favorited",
 ]
 
 
@@ -358,3 +359,31 @@ async def read_user_signals(
         """
     await cursor.execute(query, (user_email, status))
     return [Signal(**row) async for row in cursor]
+
+
+async def is_signal_favorited(cursor: AsyncCursor, user_email: str, signal_id: int) -> bool:
+    """
+    Check if a signal is favorited by a user.
+
+    Parameters
+    ----------
+    cursor : AsyncCursor
+        An async database cursor.
+    user_email : str
+        The email of the user to check.
+    signal_id : int
+        The ID of the signal to check.
+
+    Returns
+    -------
+    bool
+        True if the signal is favorited by the user, False otherwise.
+    """
+    query = """
+        SELECT 1
+        FROM favourites f
+        JOIN users u ON f.user_id = u.id
+        WHERE u.email = %s AND f.signal_id = %s;
+    """
+    await cursor.execute(query, (user_email, signal_id))
+    return await cursor.fetchone() is not None

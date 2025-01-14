@@ -29,6 +29,10 @@ class Signal(BaseEntity):
         default=None,
         description="IDs of trends connected to this signal.",
     )
+    favorite: bool = Field(
+        default=False,
+        description="Whether the current user has favorited this signal.",
+    )
 
     model_config = ConfigDict(
         json_schema_extra={
@@ -38,6 +42,7 @@ class Signal(BaseEntity):
                 "relevance": "Of the approximately US$13 trillion that governments spend on public spending, up to 25 percent is lost to corruption.",
                 "keywords": ["economy", "governance"],
                 "location": "Global",
+                "favorite": False,
             }
         }
     )

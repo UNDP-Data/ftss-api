@@ -5,11 +5,14 @@ the frontend platform with the backend database.
 
 from dotenv import load_dotenv
 from fastapi import Depends, FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 from src import routers
 from src.authentication import authenticate_user
+from src.config.logging_config import setup_logging
 
 load_dotenv()
+setup_logging()
 
 app = FastAPI(
     debug=False,
@@ -42,9 +45,19 @@ app = FastAPI(
         {"name": "trends", "description": "CRUD operations on trends."},
         {"name": "users", "description": "CRUD operations on users."},
         {"name": "choices", "description": "List valid options for forms fields."},
+        {"name": "favourites", "description": "Manage user's favorite signals."},
     ],
     docs_url="/",
     redoc_url=None,
+)
+
+# allow cors
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 
