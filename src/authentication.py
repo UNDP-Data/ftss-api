@@ -149,7 +149,7 @@ async def authenticate_user(
             return User(**user_data)
 
     if token == os.environ.get("API_KEY"):
-        if os.environ.get("ENV") == "dev":
+      if os.environ.get("ENV_MODE") == "local":
             return User(email="name.surname@undp.org", role=Role.ADMIN)
         else:
             # dummy user object for anonymous access
