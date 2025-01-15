@@ -130,11 +130,12 @@ async def authenticate_user(
     user : User
         Pydantic model for a User object (if authentication succeeded).
     """
-    logging.debug(f"Authenticating user with token")
+    logging.debug("Authenticating user with token")
     if os.environ.get("TEST_USER_TOKEN"): 
         token = os.environ.get("TEST_USER_TOKEN")
+    
     if os.environ.get("ENV_MODE") == "local":
-        # defaul user data
+        # default user data
         user_data = {
             "email": "test.user@undp.org",
             "name": "Test User",
@@ -149,18 +150,21 @@ async def authenticate_user(
             return User(**user_data)
 
     if token == os.environ.get("API_KEY"):
-      if os.environ.get("ENV_MODE") == "local":
+        if os.environ.get("ENV_MODE") == "local":
             return User(email="name.surname@undp.org", role=Role.ADMIN)
         else:
             # dummy user object for anonymous access
             return User(email="name.surname@undp.org", role=Role.VISITOR)
+
     try:
         payload = await decode_token(token)
     except jwt.exceptions.PyJWTError as e:
         raise exceptions.not_authenticated from e
+
     email, name = payload.get("unique_name"), payload.get("name")
     if email is None or name is None:
         raise exceptions.not_authenticated
+    
     if (user := await db.read_user_by_email(cursor, email)) is None:
         user = User(email=email, role=Role.USER, name=name)
         await db.create_user(cursor, user)

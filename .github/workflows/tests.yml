@@ -21,6 +21,10 @@ jobs:
       AZURE_STORAGE_CONNECTION_STRING: test_connection_string
       AZURE_STORAGE_CONTAINER: test_container
       PYTHONUNBUFFERED: "1"
+      ENV_MODE: local
+      SAS_URL: https://test.blob.core.windows.net/test
+      API_JWT: test-admin-token
+
     services:
       postgres:
         image: postgres:latest
@@ -50,7 +54,7 @@ jobs:
       - name: Install system dependencies
         run: |
           apt-get update
-          apt-get install -y postgresql-client
+          apt-get install -y postgresql-client libpq-dev gcc python3-dev
 
       - name: Install Python dependencies
         run: |
@@ -74,9 +78,21 @@ jobs:
           echo "Verifying tables..."
           PGPASSWORD=password psql -h postgres -U postgres -d postgres -c "\dt" -t | wc -l | xargs -I {} test {} -gt 0
           echo "Database initialization completed successfully"
-        env:
-          PGPASSWORD: password
 
-      - name: Run tests
+      - name: Initialize test data
+        run: |
+          echo "Initializing test data..."
+          # Create test admin user
+          PGPASSWORD=password psql -h postgres -U postgres -d postgres -c "INSERT INTO users (email, role, name) VALUES ('test.user@undp.org', 'Admin', 'Test User');"
+          # Create test regular user
+          PGPASSWORD=password psql -h postgres -U postgres -d postgres -c "INSERT INTO users (email, role, name) VALUES ('test.regular@undp.org', 'User', 'Regular User');"
+          # Initialize test signals
+          PGPASSWORD=password psql -h postgres -U postgres -d postgres -f sql/init_test_data.sql
+          PGPASSWORD=password psql -h postgres -U postgres -d postgres -c "SELECT insert_test_signals();"
+          echo "Test data initialization completed successfully"
+
+      - name: Run tests with coverage
         run: |
           python -m pytest tests/ -v --cov=src --cov-report=xml --cov-report=term-missing
+        env:
+          DB_CONNECTION: postgresql://postgres:password@postgres:5432/postgres
