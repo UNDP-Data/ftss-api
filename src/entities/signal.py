@@ -33,16 +33,25 @@ class Signal(BaseEntity):
         default=False,
         description="Whether the current user has favorited this signal.",
     )
+    is_draft: bool = Field(
+        default=True,
+        description="Whether the signal is in draft state or published.",
+    )
+    collaborators: list[str] | None = Field(
+        default=None,
+        description="List of user emails or group IDs that have editing access to this signal.",
+    )
 
     model_config = ConfigDict(
         json_schema_extra={
-            "example": BaseEntity.model_config["json_schema_extra"]["example"]
-            | {
+            "example": {
                 "url": "https://undp.medium.com/the-cost-of-corruption-a827306696fb",
                 "relevance": "Of the approximately US$13 trillion that governments spend on public spending, up to 25 percent is lost to corruption.",
                 "keywords": ["economy", "governance"],
                 "location": "Global",
                 "favorite": False,
+                "is_draft": True,
+                "collaborators": ["john.doe@undp.org", "group:1"]
             }
         }
     )

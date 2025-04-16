@@ -8,3 +8,4 @@ from .favourites import *
 from .signals import *
 from .trends import *
 from .users import *
+from .user_groups import *

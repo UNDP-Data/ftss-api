@@ -3,17 +3,17 @@ A router for retrieving, submitting and updating signals.
 """
 
 import logging
-from typing import Annotated
+from typing import Annotated, List
 
 import pandas as pd
-from fastapi import APIRouter, Depends, Path, Query
+from fastapi import APIRouter, Depends, Path, Query, HTTPException, status
 from psycopg import AsyncCursor
 
 from .. import database as db
 from .. import exceptions, genai, utils
 from ..authentication import authenticate_user
-from ..dependencies import require_creator, require_curator, require_user
-from ..entities import Role, Signal, SignalFilters, SignalPage, Status, User
+from ..dependencies import require_admin, require_creator, require_curator, require_user
+from ..entities import Role, Signal, SignalFilters, SignalPage, Status, User, UserGroup
 
 logger = logging.getLogger(__name__)
 
@@ -173,3 +173,125 @@ async def delete_signal(
     if (signal := await db.delete_signal(cursor, uid)) is None:
         raise exceptions.not_found
     return signal
+
+
+@router.get("/{uid}/collaborators", response_model=List[str])
+async def get_signal_collaborators(
+    uid: Annotated[int, Path(description="The ID of the signal")],
+    user: User = Depends(require_user),
+    cursor: AsyncCursor = Depends(db.yield_cursor),
+):
+    """
+    Get all collaborators for a signal.
+    
+    Only signal creators, admins, curators, and current collaborators can access this endpoint.
+    """
+    # Check if signal exists
+    if await db.read_signal(cursor, uid) is None:
+        raise exceptions.not_found
+    
+    # Check if user is authorized to view collaborators
+    if not user.is_admin and not user.is_staff and not await db.can_user_edit_signal(cursor, uid, user.email):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have permission to view collaborators for this signal",
+        )
+    
+    collaborators = await db.get_signal_collaborators(cursor, uid)
+    return collaborators
+
+
+@router.post("/{uid}/collaborators", response_model=bool)
+async def add_signal_collaborator(
+    uid: Annotated[int, Path(description="The ID of the signal")],
+    collaborator: Annotated[str, Path(description="The email or group ID of the collaborator to add")],
+    user: User = Depends(require_user),
+    cursor: AsyncCursor = Depends(db.yield_cursor),
+):
+    """
+    Add a collaborator to a signal.
+    
+    Only signal creators, admins, and curators can add collaborators.
+    Collaborator can be a user email or a group ID in the format "group:{id}".
+    """
+    # Check if signal exists
+    signal = await db.read_signal(cursor, uid)
+    if signal is None:
+        raise exceptions.not_found
+    
+    # Check if user is authorized to add collaborators
+    if not user.is_admin and not user.is_staff and signal.created_by != user.email:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have permission to add collaborators to this signal",
+        )
+    
+    # Add collaborator
+    if not await db.add_collaborator(cursor, uid, collaborator):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid collaborator or signal",
+        )
+    
+    return True
+
+
+@router.delete("/{uid}/collaborators/{collaborator}", response_model=bool)
+async def remove_signal_collaborator(
+    uid: Annotated[int, Path(description="The ID of the signal")],
+    collaborator: Annotated[str, Path(description="The email or group ID of the collaborator to remove")],
+    user: User = Depends(require_user),
+    cursor: AsyncCursor = Depends(db.yield_cursor),
+):
+    """
+    Remove a collaborator from a signal.
+    
+    Only signal creators, admins, and curators can remove collaborators.
+    Collaborator can be a user email or a group ID in the format "group:{id}".
+    """
+    # Check if signal exists
+    signal = await db.read_signal(cursor, uid)
+    if signal is None:
+        raise exceptions.not_found
+    
+    # Check if user is authorized to remove collaborators
+    if not user.is_admin and not user.is_staff and signal.created_by != user.email:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have permission to remove collaborators from this signal",
+        )
+    
+    # Remove collaborator
+    if not await db.remove_collaborator(cursor, uid, collaborator):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Collaborator not found or signal does not exist",
+        )
+    
+    return True
+
+
+@router.get("/{uid}/can-edit", response_model=bool)
+async def can_user_edit_signal(
+    uid: Annotated[int, Path(description="The ID of the signal")],
+    user: User = Depends(authenticate_user),
+    cursor: AsyncCursor = Depends(db.yield_cursor),
+):
+    """
+    Check if the current user can edit a signal.
+    
+    A user can edit a signal if:
+    1. They created the signal
+    2. They are an admin or curator
+    3. They are in the collaborators list
+    4. They are part of a group in the collaborators list
+    """
+    # Admins and curators can edit any signal
+    if user.is_admin or user.is_staff:
+        return True
+    
+    # Check if signal exists
+    if await db.read_signal(cursor, uid) is None:
+        raise exceptions.not_found
+    
+    return await db.can_user_edit_signal(cursor, uid, user.email)

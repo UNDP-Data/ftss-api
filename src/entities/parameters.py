@@ -84,3 +84,9 @@ class UserFilters(Pagination):
 
     roles: list[Role] = Field(default=(Role.VISITOR, Role.CURATOR, Role.ADMIN))
     query: str | None = Field(default=None)
+
+class UserGroupFilters(Pagination):
+    """Filter parameters for searching user groups."""
+
+    query: str | None = Field(default=None)
+    

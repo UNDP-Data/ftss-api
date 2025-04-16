@@ -15,6 +15,10 @@ __all__ = [
     "delete_signal",
     "read_user_signals",
     "is_signal_favorited",
+    "add_collaborator",
+    "remove_collaborator",
+    "get_signal_collaborators",
+    "can_user_edit_signal",
 ]
 
 
@@ -387,3 +391,195 @@ async def is_signal_favorited(cursor: AsyncCursor, user_email: str, signal_id: i
     """
     await cursor.execute(query, (user_email, signal_id))
     return await cursor.fetchone() is not None
+
+
+
+async def add_collaborator(cursor: AsyncCursor, signal_id: int, collaborator: str) -> bool:
+    """
+    Add a collaborator to a signal.
+
+    Parameters
+    ----------
+    cursor : AsyncCursor
+        An async database cursor.
+    signal_id : int
+        The ID of the signal.
+    collaborator : str
+        The email of the user or "group:{id}" to add as a collaborator.
+
+    Returns
+    -------
+    bool
+        True if the collaborator was added, False otherwise.
+    """
+    # Check if the signal exists
+    await cursor.execute("SELECT 1 FROM signals WHERE id = %s;", (signal_id,))
+    if await cursor.fetchone() is None:
+        return False
+    
+    # Determine if this is a group or user
+    if collaborator.startswith("group:"):
+        group_id = int(collaborator.split(":")[1])
+        query = """
+            INSERT INTO signal_collaborator_groups (signal_id, group_id)
+            VALUES (%s, %s)
+            ON CONFLICT (signal_id, group_id) DO NOTHING
+            RETURNING signal_id
+            ;
+        """
+        await cursor.execute(query, (signal_id, group_id))
+    else:
+        # Check if the user exists
+        await cursor.execute("SELECT 1 FROM users WHERE email = %s;", (collaborator,))
+        if await cursor.fetchone() is None:
+            return False
+        
+        query = """
+            INSERT INTO signal_collaborators (signal_id, user_email)
+            VALUES (%s, %s)
+            ON CONFLICT (signal_id, user_email) DO NOTHING
+            RETURNING signal_id
+            ;
+        """
+        await cursor.execute(query, (signal_id, collaborator))
+    
+    return await cursor.fetchone() is not None
+
+
+async def remove_collaborator(cursor: AsyncCursor, signal_id: int, collaborator: str) -> bool:
+    """
+    Remove a collaborator from a signal.
+
+    Parameters
+    ----------
+    cursor : AsyncCursor
+        An async database cursor.
+    signal_id : int
+        The ID of the signal.
+    collaborator : str
+        The email of the user or "group:{id}" to remove as a collaborator.
+
+    Returns
+    -------
+    bool
+        True if the collaborator was removed, False otherwise.
+    """
+    # Determine if this is a group or user
+    if collaborator.startswith("group:"):
+        group_id = int(collaborator.split(":")[1])
+        query = """
+            DELETE FROM signal_collaborator_groups
+            WHERE signal_id = %s AND group_id = %s
+            RETURNING signal_id
+            ;
+        """
+        await cursor.execute(query, (signal_id, group_id))
+    else:
+        query = """
+            DELETE FROM signal_collaborators
+            WHERE signal_id = %s AND user_email = %s
+            RETURNING signal_id
+            ;
+        """
+        await cursor.execute(query, (signal_id, collaborator))
+    
+    return await cursor.fetchone() is not None
+
+
+async def get_signal_collaborators(cursor: AsyncCursor, signal_id: int) -> list[str]:
+    """
+    Get all collaborators for a signal.
+
+    Parameters
+    ----------
+    cursor : AsyncCursor
+        An async database cursor.
+    signal_id : int
+        The ID of the signal.
+
+    Returns
+    -------
+    list[str]
+        A list of user emails and group IDs (as "group:{id}").
+    """
+    # Get individual collaborators
+    query1 = """
+        SELECT user_email
+        FROM signal_collaborators
+        WHERE signal_id = %s
+        ;
+    """
+    await cursor.execute(query1, (signal_id,))
+    user_emails = [row[0] async for row in cursor]
+    
+    # Get group collaborators
+    query2 = """
+        SELECT group_id
+        FROM signal_collaborator_groups
+        WHERE signal_id = %s
+        ;
+    """
+    await cursor.execute(query2, (signal_id,))
+    group_ids = [f"group:{row[0]}" async for row in cursor]
+    
+    return user_emails + group_ids
+
+
+async def can_user_edit_signal(cursor: AsyncCursor, signal_id: int, user_email: str) -> bool:
+    """
+    Check if a user can edit a signal.
+
+    A user can edit a signal if:
+    1. They created the signal
+    2. They are in the collaborators list
+    3. They are part of a group in the collaborators list
+
+    Parameters
+    ----------
+    cursor : AsyncCursor
+        An async database cursor.
+    signal_id : int
+        The ID of the signal.
+    user_email : str
+        The email of the user.
+
+    Returns
+    -------
+    bool
+        True if the user can edit the signal, False otherwise.
+    """
+    # Check if the user created the signal
+    query1 = """
+        SELECT 1
+        FROM signals
+        WHERE id = %s AND created_by = %s
+        ;
+    """
+    await cursor.execute(query1, (signal_id, user_email))
+    if await cursor.fetchone() is not None:
+        return True
+    
+    # Check if the user is in the collaborators list
+    query2 = """
+        SELECT 1
+        FROM signal_collaborators
+        WHERE signal_id = %s AND user_email = %s
+        ;
+    """
+    await cursor.execute(query2, (signal_id, user_email))
+    if await cursor.fetchone() is not None:
+        return True
+    
+    # Check if the user is part of a group in the collaborators list
+    query3 = """
+        SELECT 1
+        FROM signal_collaborator_groups scg
+        JOIN user_group_members ugm ON scg.group_id = ugm.group_id
+        WHERE scg.signal_id = %s AND ugm.user_email = %s
+        ;
+    """
+    await cursor.execute(query3, (signal_id, user_email))
+    if await cursor.fetchone() is not None:
+        return True
+    
+    return False

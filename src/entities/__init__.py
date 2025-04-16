@@ -11,6 +11,7 @@ from .parameters import *
 from .signal import *
 from .trend import *
 from .user import *
+from .user_groups import *
 from .utils import *
 
 
