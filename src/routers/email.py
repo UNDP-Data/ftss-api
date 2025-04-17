@@ -3,12 +3,13 @@ Router for email-related endpoints.
 """
 
 from typing import List
+
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, EmailStr
 
 from ..dependencies import require_admin
-from ..services.email_service import EmailService
 from ..entities import User
+from ..services.email_factory import create_email_service
 
 router = APIRouter(prefix="/email", tags=["email"])
 
@@ -26,7 +27,7 @@ class NotificationRequest(BaseModel):
     dynamic_data: dict
 
 # Initialize email service
-email_service = EmailService()
+email_service = create_email_service()
 
 @router.post("/send", dependencies=[Depends(require_admin)])
 async def send_email(request: EmailRequest):
