@@ -140,5 +140,7 @@ cython_debug/
 # Manually added for this project
 .idea/
 **/.DS_Store
-sql/create_test_user.sql
+create_test_user.sql
+.env.production
+/.prs
 Taskfile.yml
