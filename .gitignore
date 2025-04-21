@@ -144,3 +144,4 @@ create_test_user.sql
 .env.production
 /.prs
 Taskfile.yml
+.env.local
