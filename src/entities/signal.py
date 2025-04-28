@@ -2,7 +2,7 @@
 Entity (model) definitions for signal objects.
 """
 
-from pydantic import ConfigDict, Field
+from pydantic import ConfigDict, Field, field_validator, model_validator
 
 from . import utils
 from .base import BaseEntity
@@ -37,6 +37,15 @@ class Signal(BaseEntity):
         default=False,
         description="Whether the current user has favorited this signal.",
     )
+
+    @model_validator(mode='before')
+    @classmethod
+    def convert_secondary_location(cls, data):
+        """Convert string secondary_location to a list before validation."""
+        if isinstance(data, dict) and 'secondary_location' in data:
+            if isinstance(data['secondary_location'], str):
+                data['secondary_location'] = [data['secondary_location']]
+        return data
 
     model_config = ConfigDict(
         json_schema_extra={
