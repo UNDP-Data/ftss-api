@@ -27,6 +27,7 @@ services:
       - ./sql/create_tables.sql:/docker-entrypoint-initdb.d/1-create_tables.sql
       - ./sql/import_data.sql:/docker-entrypoint-initdb.d/2-import_data.sql
       - ./sql/init_test_data.sql:/docker-entrypoint-initdb.d/3-init_test_data.sql
+      - ./sql/add_secondary_location.sql:/app/sql/add_secondary_location.sql
       - ./data:/docker-entrypoint-initdb.d/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]

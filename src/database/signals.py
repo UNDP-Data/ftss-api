@@ -34,7 +34,7 @@ async def search_signals(cursor: AsyncCursor, filters: SignalFilters) -> SignalP
     page : SignalPage
         Paginated search results for signals.
     """
-    query = """
+    query = f"""
         SELECT 
             *, COUNT(*) OVER() AS total_count
         FROM
@@ -84,17 +84,13 @@ async def search_signals(cursor: AsyncCursor, filters: SignalFilters) -> SignalP
              AND (%(unit)s IS NULL OR unit_region = %(unit)s OR unit_name = %(unit)s)
              AND (%(query)s IS NULL OR text_search_field @@ websearch_to_tsquery('english', %(query)s))
         ORDER BY
-            {} {}
+            {filters.order_by} {filters.direction}
         OFFSET
             %(offset)s
         LIMIT
             %(limit)s
         ;
     """
-    query = sql.SQL(query).format(
-        sql.Identifier(filters.order_by),
-        sql.SQL(filters.direction),
-    )
     await cursor.execute(query, filters.model_dump())
     rows = await cursor.fetchall()
     # extract total count of rows matching the WHERE clause
@@ -112,7 +108,8 @@ async def create_signal(cursor: AsyncCursor, signal: Signal) -> int:
     cursor : AsyncCursor
         An async database cursor.
     signal : Signal
-        A signal object to insert.
+        A signal object to insert. The following fields are supported:
+        - secondary_location: list[str] | None
 
     Returns
     -------
@@ -137,6 +134,7 @@ async def create_signal(cursor: AsyncCursor, signal: Signal) -> int:
             relevance,
             keywords,
             location,
+            secondary_location,
             score
         )
         VALUES (
@@ -156,6 +154,7 @@ async def create_signal(cursor: AsyncCursor, signal: Signal) -> int:
             %(relevance)s,
             %(keywords)s,
             %(location)s,
+            %(secondary_location)s,
             %(score)s
         )
         RETURNING
@@ -221,7 +220,8 @@ async def read_signal(cursor: AsyncCursor, uid: int) -> Signal | None:
         ;
         """
     await cursor.execute(query, (uid,))
-    if (row := await cursor.fetchone()) is None:
+    row = await cursor.fetchone()
+    if row is None:
         return None
     return Signal(**row)
 
@@ -236,7 +236,8 @@ async def update_signal(cursor: AsyncCursor, signal: Signal) -> int | None:
     cursor : AsyncCursor
         An async database cursor.
     signal : Signal
-        A signal object to update.
+        A signal object to update. The following fields are supported:
+        - secondary_location: list[str] | None
 
     Returns
     -------
@@ -263,6 +264,7 @@ async def update_signal(cursor: AsyncCursor, signal: Signal) -> int | None:
              relevance = COALESCE(%(relevance)s, relevance),
              keywords = COALESCE(%(keywords)s, keywords),
              location = COALESCE(%(location)s, location),
+             secondary_location = COALESCE(%(secondary_location)s, secondary_location),
              score = COALESCE(%(score)s, score)
         WHERE
             id = %(id)s
@@ -271,7 +273,8 @@ async def update_signal(cursor: AsyncCursor, signal: Signal) -> int | None:
         ;
     """
     await cursor.execute(query, signal.model_dump())
-    if (row := await cursor.fetchone()) is None:
+    row = await cursor.fetchone()
+    if row is None:
         return None
     signal_id = row["id"]
 
@@ -308,7 +311,8 @@ async def delete_signal(cursor: AsyncCursor, uid: int) -> Signal | None:
     """
     query = "DELETE FROM signals WHERE id = %s RETURNING *;"
     await cursor.execute(query, (uid,))
-    if (row := await cursor.fetchone()) is None:
+    row = await cursor.fetchone()
+    if row is None:
         return None
     signal = Signal(**row)
     if signal.attachment is not None:
@@ -358,7 +362,8 @@ async def read_user_signals(
         ;
         """
     await cursor.execute(query, (user_email, status))
-    return [Signal(**row) async for row in cursor]
+    rows = await cursor.fetchall()
+    return [Signal(**row) for row in rows]
 
 
 async def is_signal_favorited(cursor: AsyncCursor, user_email: str, signal_id: int) -> bool:
