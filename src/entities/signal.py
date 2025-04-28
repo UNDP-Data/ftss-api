@@ -40,14 +40,17 @@ class Signal(BaseEntity):
 
     model_config = ConfigDict(
         json_schema_extra={
-            "example": BaseEntity.model_config["json_schema_extra"]["example"]
-            | {
+            "example": {
+                "id": 1,
+                "created_unit": "HQ",
                 "url": "https://undp.medium.com/the-cost-of-corruption-a827306696fb",
                 "relevance": "Of the approximately US$13 trillion that governments spend on public spending, up to 25 percent is lost to corruption.",
                 "keywords": ["economy", "governance"],
                 "location": "Global",
                 "secondary_location": ["Africa", "Asia"],
-                "favorite": False,
+                "score": None,
+                "connected_trends": [101, 102],
+                "favorite": False
             }
         }
     )
