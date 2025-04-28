@@ -24,6 +24,10 @@ class Signal(BaseEntity):
         default=None,
         description="Region and/or country for which this signal has greatest relevance.",
     )
+    secondary_location: list[str] | None = Field(
+        default=None,
+        description="Additional regions and/or countries for which this signal has relevance.",
+    )
     score: utils.Score | None = Field(default=None)
     connected_trends: list[int] | None = Field(
         default=None,
@@ -42,6 +46,7 @@ class Signal(BaseEntity):
                 "relevance": "Of the approximately US$13 trillion that governments spend on public spending, up to 25 percent is lost to corruption.",
                 "keywords": ["economy", "governance"],
                 "location": "Global",
+                "secondary_location": ["Africa", "Asia"],
                 "favorite": False,
             }
         }

@@ -137,6 +137,7 @@ async def create_signal(cursor: AsyncCursor, signal: Signal) -> int:
             relevance,
             keywords,
             location,
+            secondary_location,
             score
         )
         VALUES (
@@ -156,6 +157,7 @@ async def create_signal(cursor: AsyncCursor, signal: Signal) -> int:
             %(relevance)s,
             %(keywords)s,
             %(location)s,
+            %(secondary_location)s,
             %(score)s
         )
         RETURNING
@@ -263,6 +265,7 @@ async def update_signal(cursor: AsyncCursor, signal: Signal) -> int | None:
              relevance = COALESCE(%(relevance)s, relevance),
              keywords = COALESCE(%(keywords)s, keywords),
              location = COALESCE(%(location)s, location),
+             secondary_location = COALESCE(%(secondary_location)s, secondary_location),
              score = COALESCE(%(score)s, score)
         WHERE
             id = %(id)s
