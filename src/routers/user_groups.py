@@ -71,25 +71,154 @@ async def delete_user_group(
     return True
 
 
-@router.post("/{group_id}/users/{email}", response_model=bool, dependencies=[Depends(require_admin)])
+@router.post("/{group_id}/users/{user_id}", response_model=bool, dependencies=[Depends(require_admin)])
 async def add_user_to_group(
     group_id: Annotated[int, Path(description="The ID of the user group")],
-    email: Annotated[str, Path(description="The email of the user to add")],
+    user_id: Annotated[int, Path(description="The ID of the user to add")],
     cursor: AsyncCursor = Depends(db.yield_cursor),
 ):
     """Add a user to a group."""
-    if not await db.add_user_to_group(cursor, group_id, email):
+    if not await db.add_user_to_group(cursor, group_id, user_id):
         raise exceptions.not_found
     return True
 
 
-@router.delete("/{group_id}/users/{email}", response_model=bool, dependencies=[Depends(require_admin)])
+@router.delete("/{group_id}/users/{user_id}", response_model=bool, dependencies=[Depends(require_admin)])
 async def remove_user_from_group(
     group_id: Annotated[int, Path(description="The ID of the user group")],
-    email: Annotated[str, Path(description="The email of the user to remove")],
+    user_id: Annotated[int, Path(description="The ID of the user to remove")],
     cursor: AsyncCursor = Depends(db.yield_cursor),
 ):
     """Remove a user from a group."""
-    if not await db.remove_user_from_group(cursor, group_id, email):
+    if not await db.remove_user_from_group(cursor, group_id, user_id):
         raise exceptions.not_found
+    return True
+
+
+@router.post("/{group_id}/signals/{signal_id}", response_model=bool, dependencies=[Depends(require_admin)])
+async def add_signal_to_group(
+    group_id: Annotated[int, Path(description="The ID of the user group")],
+    signal_id: Annotated[int, Path(description="The ID of the signal to add")],
+    cursor: AsyncCursor = Depends(db.yield_cursor),
+):
+    """Add a signal to a group."""
+    # Get the group
+    group = await db.read_user_group(cursor, group_id)
+    if group is None:
+        raise exceptions.not_found
+    
+    # Check if signal exists
+    if await db.read_signal(cursor, signal_id) is None:
+        raise exceptions.not_found
+    
+    # Add signal to group
+    signal_ids = group.signal_ids or []
+    if signal_id not in signal_ids:
+        signal_ids.append(signal_id)
+        group.signal_ids = signal_ids
+        
+        if await db.update_user_group(cursor, group) is None:
+            raise exceptions.not_found
+    
+    return True
+
+
+@router.delete("/{group_id}/signals/{signal_id}", response_model=bool, dependencies=[Depends(require_admin)])
+async def remove_signal_from_group(
+    group_id: Annotated[int, Path(description="The ID of the user group")],
+    signal_id: Annotated[int, Path(description="The ID of the signal to remove")],
+    cursor: AsyncCursor = Depends(db.yield_cursor),
+):
+    """Remove a signal from a group."""
+    # Get the group
+    group = await db.read_user_group(cursor, group_id)
+    if group is None:
+        raise exceptions.not_found
+    
+    # Remove signal from group
+    signal_ids = group.signal_ids or []
+    if signal_id in signal_ids:
+        signal_ids.remove(signal_id)
+        group.signal_ids = signal_ids
+        
+        # Also remove collaborators for this signal
+        collaborator_map = group.collaborator_map or {}
+        signal_key = str(signal_id)
+        if signal_key in collaborator_map:
+            del collaborator_map[signal_key]
+            group.collaborator_map = collaborator_map
+        
+        if await db.update_user_group(cursor, group) is None:
+            raise exceptions.not_found
+    
+    return True
+
+
+@router.post("/{group_id}/signals/{signal_id}/collaborators/{user_id}", response_model=bool, dependencies=[Depends(require_admin)])
+async def add_collaborator_to_signal_in_group(
+    group_id: Annotated[int, Path(description="The ID of the user group")],
+    signal_id: Annotated[int, Path(description="The ID of the signal")],
+    user_id: Annotated[int, Path(description="The ID of the user to add as collaborator")],
+    cursor: AsyncCursor = Depends(db.yield_cursor),
+):
+    """Add a user as a collaborator for a specific signal in a group."""
+    # Get the group
+    group = await db.read_user_group(cursor, group_id)
+    if group is None:
+        raise exceptions.not_found
+    
+    # Check if signal is in the group
+    signal_ids = group.signal_ids or []
+    if signal_id not in signal_ids:
+        raise exceptions.not_found
+    
+    # Check if user is in the group
+    user_ids = group.user_ids or []
+    if user_id not in user_ids:
+        raise exceptions.not_found
+    
+    # Add collaborator
+    collaborator_map = group.collaborator_map or {}
+    signal_key = str(signal_id)
+    if signal_key not in collaborator_map:
+        collaborator_map[signal_key] = []
+    
+    if user_id not in collaborator_map[signal_key]:
+        collaborator_map[signal_key].append(user_id)
+        group.collaborator_map = collaborator_map
+        
+        if await db.update_user_group(cursor, group) is None:
+            raise exceptions.not_found
+    
+    return True
+
+
+@router.delete("/{group_id}/signals/{signal_id}/collaborators/{user_id}", response_model=bool, dependencies=[Depends(require_admin)])
+async def remove_collaborator_from_signal_in_group(
+    group_id: Annotated[int, Path(description="The ID of the user group")],
+    signal_id: Annotated[int, Path(description="The ID of the signal")],
+    user_id: Annotated[int, Path(description="The ID of the user to remove as collaborator")],
+    cursor: AsyncCursor = Depends(db.yield_cursor),
+):
+    """Remove a user as a collaborator for a specific signal in a group."""
+    # Get the group
+    group = await db.read_user_group(cursor, group_id)
+    if group is None:
+        raise exceptions.not_found
+    
+    # Check if this collaborator assignment exists
+    collaborator_map = group.collaborator_map or {}
+    signal_key = str(signal_id)
+    if signal_key in collaborator_map and user_id in collaborator_map[signal_key]:
+        collaborator_map[signal_key].remove(user_id)
+        
+        # If no collaborators left for this signal, remove the entry
+        if not collaborator_map[signal_key]:
+            del collaborator_map[signal_key]
+        
+        group.collaborator_map = collaborator_map
+        
+        if await db.update_user_group(cursor, group) is None:
+            raise exceptions.not_found
+    
     return True 

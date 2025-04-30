@@ -37,22 +37,23 @@ async def create_user_group(cursor: AsyncCursor, group: UserGroup) -> int:
     """
     query = """
         INSERT INTO user_groups (
-            name
+            name,
+            signal_ids,
+            user_ids,
+            collaborator_map
         )
         VALUES (
-            %(name)s
+            %(name)s,
+            %(signal_ids)s,
+            %(user_ids)s,
+            %(collaborator_map)s
         )
         RETURNING id
         ;
     """
-    await cursor.execute(query, group.model_dump(exclude={"users", "id"}))
+    await cursor.execute(query, group.model_dump(exclude={"id"}))
     row = await cursor.fetchone()
     group_id = row[0]
-    
-    # Add users to the group
-    if group.users:
-        for user_email in group.users:
-            await add_user_to_group(cursor, group_id, user_email)
     
     return group_id
 
@@ -75,29 +76,23 @@ async def read_user_group(cursor: AsyncCursor, group_id: int) -> UserGroup | Non
     """
     query = """
         SELECT 
-            g.id, 
-            g.name,
-            ARRAY_AGG(u.email) AS users
+            id, 
+            name,
+            signal_ids,
+            user_ids,
+            collaborator_map
         FROM 
-            user_groups g
-        LEFT JOIN 
-            user_group_members m ON g.id = m.group_id
-        LEFT JOIN 
-            users u ON m.user_email = u.email
+            user_groups
         WHERE 
-            g.id = %s
-        GROUP BY 
-            g.id, g.name
+            id = %s
         ;
     """
     await cursor.execute(query, (group_id,))
     if (row := await cursor.fetchone()) is None:
         return None
     
-    # Convert row to dict and handle null values for users
-    data = dict(zip(["id", "name", "users"], row))
-    if data["users"] == [None]:
-        data["users"] = []
+    # Convert row to dict
+    data = dict(zip(["id", "name", "signal_ids", "user_ids", "collaborator_map"], row))
     
     return UserGroup(**data)
 
@@ -120,26 +115,20 @@ async def update_user_group(cursor: AsyncCursor, group: UserGroup) -> int | None
     """
     query = """
         UPDATE user_groups
-        SET name = %(name)s
+        SET 
+            name = %(name)s,
+            signal_ids = %(signal_ids)s,
+            user_ids = %(user_ids)s,
+            collaborator_map = %(collaborator_map)s
         WHERE id = %(id)s
         RETURNING id
         ;
     """
-    await cursor.execute(query, group.model_dump(exclude={"users"}))
+    await cursor.execute(query, group.model_dump())
     if (row := await cursor.fetchone()) is None:
         return None
     
-    group_id = row[0]
-    
-    # First remove all existing members
-    await cursor.execute("DELETE FROM user_group_members WHERE group_id = %s;", (group_id,))
-    
-    # Then add the new members
-    if group.users:
-        for user_email in group.users:
-            await add_user_to_group(cursor, group_id, user_email)
-    
-    return group_id
+    return row[0]
 
 
 async def delete_user_group(cursor: AsyncCursor, group_id: int) -> bool:
@@ -158,10 +147,6 @@ async def delete_user_group(cursor: AsyncCursor, group_id: int) -> bool:
     bool
         True if the group was deleted, False otherwise.
     """
-    # First delete all members
-    await cursor.execute("DELETE FROM user_group_members WHERE group_id = %s;", (group_id,))
-    
-    # Then delete the group
     query = "DELETE FROM user_groups WHERE id = %s RETURNING id;"
     await cursor.execute(query, (group_id,))
     
@@ -184,36 +169,29 @@ async def list_user_groups(cursor: AsyncCursor) -> list[UserGroup]:
     """
     query = """
         SELECT 
-            g.id, 
-            g.name,
-            ARRAY_AGG(u.email) AS users
+            id, 
+            name,
+            signal_ids,
+            user_ids,
+            collaborator_map
         FROM 
-            user_groups g
-        LEFT JOIN 
-            user_group_members m ON g.id = m.group_id
-        LEFT JOIN 
-            users u ON m.user_email = u.email
-        GROUP BY 
-            g.id, g.name
+            user_groups
         ORDER BY 
-            g.name
+            name
         ;
     """
     await cursor.execute(query)
     result = []
     
     async for row in cursor:
-        # Convert row to dict and handle null values for users
-        data = dict(zip(["id", "name", "users"], row))
-        if data["users"] == [None]:
-            data["users"] = []
-        
+        # Convert row to dict
+        data = dict(zip(["id", "name", "signal_ids", "user_ids", "collaborator_map"], row))
         result.append(UserGroup(**data))
     
     return result
 
 
-async def add_user_to_group(cursor: AsyncCursor, group_id: int, user_email: str) -> bool:
+async def add_user_to_group(cursor: AsyncCursor, group_id: int, user_id: int) -> bool:
     """
     Add a user to a group.
 
@@ -223,8 +201,8 @@ async def add_user_to_group(cursor: AsyncCursor, group_id: int, user_email: str)
         An async database cursor.
     group_id : int
         The ID of the group.
-    user_email : str
-        The email of the user to add.
+    user_id : int
+        The ID of the user to add.
 
     Returns
     -------
@@ -232,29 +210,35 @@ async def add_user_to_group(cursor: AsyncCursor, group_id: int, user_email: str)
         True if the user was added, False otherwise.
     """
     # Check if the user exists
-    await cursor.execute("SELECT 1 FROM users WHERE email = %s;", (user_email,))
+    await cursor.execute("SELECT 1 FROM users WHERE id = %s;", (user_id,))
     if await cursor.fetchone() is None:
         return False
     
     # Check if the group exists
-    await cursor.execute("SELECT 1 FROM user_groups WHERE id = %s;", (group_id,))
-    if await cursor.fetchone() is None:
+    await cursor.execute("SELECT user_ids FROM user_groups WHERE id = %s;", (group_id,))
+    row = await cursor.fetchone()
+    if row is None:
         return False
     
     # Add the user to the group (if not already a member)
-    query = """
-        INSERT INTO user_group_members (group_id, user_email)
-        VALUES (%s, %s)
-        ON CONFLICT (group_id, user_email) DO NOTHING
-        RETURNING group_id
-        ;
-    """
-    await cursor.execute(query, (group_id, user_email))
+    user_ids = row[0] if row[0] is not None else []
+    if user_id not in user_ids:
+        user_ids.append(user_id)
+        
+        query = """
+            UPDATE user_groups
+            SET user_ids = %s
+            WHERE id = %s
+            RETURNING id
+            ;
+        """
+        await cursor.execute(query, (user_ids, group_id))
+        return await cursor.fetchone() is not None
     
-    return await cursor.fetchone() is not None
+    return True
 
 
-async def remove_user_from_group(cursor: AsyncCursor, group_id: int, user_email: str) -> bool:
+async def remove_user_from_group(cursor: AsyncCursor, group_id: int, user_id: int) -> bool:
     """
     Remove a user from a group.
 
@@ -264,26 +248,50 @@ async def remove_user_from_group(cursor: AsyncCursor, group_id: int, user_email:
         An async database cursor.
     group_id : int
         The ID of the group.
-    user_email : str
-        The email of the user to remove.
+    user_id : int
+        The ID of the user to remove.
 
     Returns
     -------
     bool
         True if the user was removed, False otherwise.
     """
-    query = """
-        DELETE FROM user_group_members
-        WHERE group_id = %s AND user_email = %s
-        RETURNING group_id
-        ;
-    """
-    await cursor.execute(query, (group_id, user_email))
+    # Get current user_ids
+    await cursor.execute("SELECT user_ids, collaborator_map FROM user_groups WHERE id = %s;", (group_id,))
+    row = await cursor.fetchone()
+    if row is None:
+        return False
     
-    return await cursor.fetchone() is not None
+    user_ids = row[0] if row[0] is not None else []
+    collaborator_map = row[1] if row[1] is not None else {}
+    
+    # Remove user from user_ids
+    if user_id in user_ids:
+        user_ids.remove(user_id)
+        
+        # Remove user from collaborator_map
+        for signal_id, users in list(collaborator_map.items()):
+            if user_id in users:
+                users.remove(user_id)
+                if not users:  # If empty, remove signal from map
+                    del collaborator_map[signal_id]
+        
+        query = """
+            UPDATE user_groups
+            SET 
+                user_ids = %s,
+                collaborator_map = %s
+            WHERE id = %s
+            RETURNING id
+            ;
+        """
+        await cursor.execute(query, (user_ids, collaborator_map, group_id))
+        return await cursor.fetchone() is not None
+    
+    return False
 
 
-async def get_user_groups(cursor: AsyncCursor, user_email: str) -> list[UserGroup]:
+async def get_user_groups(cursor: AsyncCursor, user_id: int) -> list[UserGroup]:
     """
     Get all groups that a user is a member of.
 
@@ -291,8 +299,8 @@ async def get_user_groups(cursor: AsyncCursor, user_email: str) -> list[UserGrou
     ----------
     cursor : AsyncCursor
         An async database cursor.
-    user_email : str
-        The email of the user.
+    user_id : int
+        The ID of the user.
 
     Returns
     -------
@@ -301,40 +309,31 @@ async def get_user_groups(cursor: AsyncCursor, user_email: str) -> list[UserGrou
     """
     query = """
         SELECT 
-            g.id, 
-            g.name,
-            ARRAY_AGG(u.email) AS users
+            id, 
+            name,
+            signal_ids,
+            user_ids,
+            collaborator_map
         FROM 
-            user_groups g
-        JOIN 
-            user_group_members m ON g.id = m.group_id
-        LEFT JOIN 
-            user_group_members m2 ON g.id = m2.group_id
-        LEFT JOIN 
-            users u ON m2.user_email = u.email
+            user_groups
         WHERE 
-            m.user_email = %s
-        GROUP BY 
-            g.id, g.name
+            %s = ANY(user_ids)
         ORDER BY 
-            g.name
+            name
         ;
     """
-    await cursor.execute(query, (user_email,))
+    await cursor.execute(query, (user_id,))
     result = []
     
     async for row in cursor:
-        # Convert row to dict and handle null values for users
-        data = dict(zip(["id", "name", "users"], row))
-        if data["users"] == [None]:
-            data["users"] = []
-        
+        # Convert row to dict
+        data = dict(zip(["id", "name", "signal_ids", "user_ids", "collaborator_map"], row))
         result.append(UserGroup(**data))
     
     return result
 
 
-async def get_group_users(cursor: AsyncCursor, group_id: int) -> list[str]:
+async def get_group_users(cursor: AsyncCursor, group_id: int) -> list[int]:
     """
     Get all users in a group.
 
@@ -347,17 +346,16 @@ async def get_group_users(cursor: AsyncCursor, group_id: int) -> list[str]:
 
     Returns
     -------
-    list[str]
-        A list of user emails.
+    list[int]
+        A list of user IDs.
     """
     query = """
-        SELECT u.email
-        FROM user_group_members m
-        JOIN users u ON m.user_email = u.email
-        WHERE m.group_id = %s
-        ORDER BY u.email
+        SELECT user_ids
+        FROM user_groups
+        WHERE id = %s
         ;
     """
     await cursor.execute(query, (group_id,))
+    row = await cursor.fetchone()
     
-    return [row[0] async for row in cursor]
+    return row[0] if row and row[0] else []

@@ -2,6 +2,7 @@
 Entity (model) definitions for signal objects.
 """
 
+from typing import List, Dict
 from pydantic import ConfigDict, Field, field_validator, model_validator
 
 from . import utils
@@ -41,9 +42,13 @@ class Signal(BaseEntity):
         default=True,
         description="Whether the signal is in draft state or published.",
     )
-    collaborators: list[str] | None = Field(
+    group_ids: List[int] | None = Field(
         default=None,
-        description="List of user emails or group IDs that have editing access to this signal.",
+        description="List of user group IDs associated with this signal.",
+    )
+    collaborators: List[int] | None = Field(
+        default=None,
+        description="List of user IDs who can collaborate on this signal.",
     )
 
     @model_validator(mode='before')
@@ -66,7 +71,8 @@ class Signal(BaseEntity):
                 "location": "Global",
                 "favorite": False,
                 "is_draft": True,
-                "collaborators": ["john.doe@undp.org", "group:1"]
+                "group_ids": [1, 2],
+                "collaborators": [1, 2, 3],
                 "secondary_location": ["Africa", "Asia"],
                 "score": None,
                 "connected_trends": [101, 102],
