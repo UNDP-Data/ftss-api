@@ -1,0 +1,47 @@
+"""
+Entity (model) definitions for user group objects.
+"""
+
+from typing import Dict, List
+from pydantic import ConfigDict, Field
+
+from .base import BaseEntity
+
+__all__ = ["UserGroup"]
+
+
+class UserGroup(BaseEntity):
+    """The user group entity model used in the database and API endpoints."""
+
+    name: str = Field(
+        description="Name of the user group.",
+        min_length=3,
+    )
+    signal_ids: List[int] = Field(
+        default_factory=list,
+        description="List of signal IDs associated with this group."
+    )
+    user_ids: List[int] = Field(
+        default_factory=list,
+        description="List of user IDs who are members of this group."
+    )
+    collaborator_map: Dict[str, List[int]] = Field(
+        default_factory=dict,
+        description="Map of signal IDs to lists of user IDs that can collaborate on that signal."
+    )
+    
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "id": 1,
+                "name": "CDO",
+                "signal_ids": [1, 2, 3],
+                "user_ids": [1, 2, 3],
+                "collaborator_map": {
+                    "1": [1, 2],
+                    "2": [1, 3],
+                    "3": [2, 3]
+                }
+            }
+        }
+    )
