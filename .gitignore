@@ -145,3 +145,4 @@ create_test_user.sql
 /.prs
 Taskfile.yml
 .env.local
+/.logs
