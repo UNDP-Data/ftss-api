@@ -66,18 +66,6 @@ app = FastAPI(
     redoc_url=None,
 )
 
-# allow cors
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-# Add Bugsnag exception handling middleware
-app = get_bugsnag_middleware(app)
-
 # Add global exception handler to report errors to Bugsnag
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
@@ -102,6 +90,18 @@ async def global_exception_handler(request: Request, exc: Exception):
         content={"detail": "Internal server error"},
     )
 
+# allow cors
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Add Bugsnag exception handling middleware
+# Important: Add middleware AFTER registering exception handlers
+bugsnag_app = get_bugsnag_middleware(app)
 
 for router in routers.ALL:
     app.include_router(router=router, dependencies=[Depends(authenticate_user)])
@@ -136,3 +136,6 @@ async def test_error():
         return {"status": "error_reported", "message": "Test error sent to Bugsnag"}
     else:
         return {"status": "disabled", "message": "Bugsnag is not enabled"}
+
+# Use the Bugsnag middleware wrapped app for ASGI
+app = bugsnag_app
