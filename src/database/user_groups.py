@@ -4,7 +4,7 @@ CRUD operations for user group entities.
 
 from psycopg import AsyncCursor
 
-from ..entities import UserGroup
+from ..entities import UserGroup, Signal
 
 __all__ = [
     "create_user_group",
@@ -16,6 +16,8 @@ __all__ = [
     "remove_user_from_group",
     "get_user_groups",
     "get_group_users",
+    "get_user_groups_with_signals",
+    "get_signal_group_collaborators",
 ]
 
 
@@ -53,6 +55,8 @@ async def create_user_group(cursor: AsyncCursor, group: UserGroup) -> int:
     """
     await cursor.execute(query, group.model_dump(exclude={"id"}))
     row = await cursor.fetchone()
+    if row is None:
+        raise ValueError("Failed to create user group")
     group_id = row[0]
     
     return group_id
@@ -359,3 +363,105 @@ async def get_group_users(cursor: AsyncCursor, group_id: int) -> list[int]:
     row = await cursor.fetchone()
     
     return row[0] if row and row[0] else []
+
+
+async def get_user_groups_with_signals(cursor: AsyncCursor, user_id: int) -> list[dict]:
+    """
+    Get all groups that a user is a member of, along with the associated signals data.
+
+    Parameters
+    ----------
+    cursor : AsyncCursor
+        An async database cursor.
+    user_id : int
+        The ID of the user.
+
+    Returns
+    -------
+    list[dict]
+        A list of dictionaries containing user group and signal data.
+    """
+    # First get the groups the user belongs to
+    user_groups = await get_user_groups(cursor, user_id)
+    result = []
+    
+    # For each group, fetch the signals data
+    for group in user_groups:
+        group_data = group.model_dump()
+        signals = []
+        
+        # Get signals for this group
+        if group.signal_ids:
+            signals_query = """
+                SELECT 
+                    s.*,
+                    array_agg(c.trend_id) FILTER (WHERE c.trend_id IS NOT NULL) AS connected_trends
+                FROM 
+                    signals s
+                LEFT JOIN 
+                    connections c ON s.id = c.signal_id
+                WHERE 
+                    s.id = ANY(%s)
+                GROUP BY 
+                    s.id
+                ORDER BY 
+                    s.id
+                ;
+            """
+            await cursor.execute(signals_query, (group.signal_ids,))
+            
+            async for row in cursor:
+                signal_dict = dict(row)
+                # Check if user is a collaborator for this signal
+                can_edit = False
+                signal_id_str = str(signal_dict["id"])
+                
+                if group.collaborator_map and signal_id_str in group.collaborator_map:
+                    if user_id in group.collaborator_map[signal_id_str]:
+                        can_edit = True
+                
+                signal_dict["can_edit"] = can_edit
+                signals.append(Signal(**signal_dict))
+        
+        group_data["signals"] = signals
+        result.append(group_data)
+    
+    return result
+
+
+async def get_signal_group_collaborators(cursor: AsyncCursor, signal_id: int) -> list[int]:
+    """
+    Get all user IDs that can collaborate on a signal through group membership.
+
+    Parameters
+    ----------
+    cursor : AsyncCursor
+        An async database cursor.
+    signal_id : int
+        The ID of the signal.
+
+    Returns
+    -------
+    list[int]
+        A list of user IDs that can collaborate on the signal.
+    """
+    signal_id_str = str(signal_id)
+    query = """
+        SELECT 
+            collaborator_map->%s as collaborators
+        FROM 
+            user_groups
+        WHERE 
+            %s = ANY(signal_ids)
+            AND collaborator_map ? %s
+        ;
+    """
+    await cursor.execute(query, (signal_id_str, signal_id, signal_id_str))
+    
+    collaborators = set()
+    async for row in cursor:
+        if row[0]:  # Access first column using integer index
+            for user_id in row[0]:
+                collaborators.add(user_id)
+    
+    return list(collaborators)

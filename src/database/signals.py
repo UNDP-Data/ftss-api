@@ -530,61 +530,57 @@ async def get_signal_collaborators(cursor: AsyncCursor, signal_id: int) -> list[
     return user_emails + group_ids
 
 
-async def can_user_edit_signal(cursor: AsyncCursor, signal_id: int, user_email: str) -> bool:
+async def can_user_edit_signal(cursor: AsyncCursor, signal_id: int, user_id: int) -> bool:
     """
     Check if a user can edit a signal.
-
+    
     A user can edit a signal if:
     1. They created the signal
-    2. They are in the collaborators list
-    3. They are part of a group in the collaborators list
-
+    2. They are a direct collaborator for the signal
+    3. They are part of a group that can collaborate on this signal
+    
     Parameters
     ----------
     cursor : AsyncCursor
         An async database cursor.
     signal_id : int
-        The ID of the signal.
-    user_email : str
-        The email of the user.
-
+        The ID of the signal to check.
+    user_id : int
+        The ID of the user to check.
+        
     Returns
     -------
     bool
         True if the user can edit the signal, False otherwise.
     """
-    # Check if the user created the signal
-    query1 = """
-        SELECT 1
-        FROM signals
-        WHERE id = %s AND created_by = %s
-        ;
-    """
-    await cursor.execute(query1, (signal_id, user_email))
+    # First, check if the user created the signal
+    from ..entities import User  # Import here to avoid circular imports
+    
+    # Get user's email from ID
+    query = "SELECT email FROM users WHERE id = %s;"
+    await cursor.execute(query, (user_id,))
+    row = await cursor.fetchone()
+    if row is None:
+        return False
+    
+    user_email = row[0]
+    
+    # Check if user created the signal
+    query = "SELECT 1 FROM signals WHERE id = %s AND created_by = %s;"
+    await cursor.execute(query, (signal_id, user_email))
     if await cursor.fetchone() is not None:
         return True
     
-    # Check if the user is in the collaborators list
-    query2 = """
-        SELECT 1
-        FROM signal_collaborators
-        WHERE signal_id = %s AND user_email = %s
-        ;
-    """
-    await cursor.execute(query2, (signal_id, user_email))
+    # Check direct collaborators
+    query = "SELECT 1 FROM signal_collaborators WHERE signal_id = %s AND user_id = %s;"
+    await cursor.execute(query, (signal_id, user_id))
     if await cursor.fetchone() is not None:
         return True
     
-    # Check if the user is part of a group in the collaborators list
-    query3 = """
-        SELECT 1
-        FROM signal_collaborator_groups scg
-        JOIN user_group_members ugm ON scg.group_id = ugm.group_id
-        WHERE scg.signal_id = %s AND ugm.user_email = %s
-        ;
-    """
-    await cursor.execute(query3, (signal_id, user_email))
-    if await cursor.fetchone() is not None:
+    # Check group collaborators
+    from . import user_groups  # Import here to avoid circular imports
+    group_collaborators = await user_groups.get_signal_group_collaborators(cursor, signal_id)
+    if user_id in group_collaborators:
         return True
     
     return False

@@ -5,13 +5,14 @@ A router for managing user groups.
 import logging
 from typing import Annotated, List
 
-from fastapi import APIRouter, Depends, Path, Body
+from fastapi import APIRouter, Depends, Path, Body, Query
 from psycopg import AsyncCursor
 
 from .. import database as db
 from .. import exceptions
-from ..dependencies import require_admin
-from ..entities import UserGroup
+from ..dependencies import require_admin, require_user
+from ..entities import UserGroup, User, UserGroupWithSignals
+from ..authentication import authenticate_user
 
 router = APIRouter(prefix="/user-groups", tags=["user groups"])
 
@@ -23,6 +24,49 @@ async def list_user_groups(
     """List all user groups."""
     groups = await db.list_user_groups(cursor)
     return groups
+
+
+@router.get("/me", response_model=List[UserGroup])
+async def get_my_user_groups(
+    user: User = Depends(authenticate_user),
+    cursor: AsyncCursor = Depends(db.yield_cursor),
+):
+    """
+    Get all user groups that the current user is a member of.
+    This endpoint is accessible to all authenticated users.
+    """
+    if not user.id:
+        raise exceptions.not_found
+    
+    # Get groups this user is a member of
+    user_groups = await db.get_user_groups(cursor, user.id)
+    return user_groups
+
+
+@router.get("/me/with-signals", response_model=List[UserGroupWithSignals])
+async def get_my_user_groups_with_signals(
+    user: User = Depends(authenticate_user),
+    cursor: AsyncCursor = Depends(db.yield_cursor),
+):
+    """
+    Get all user groups that the current user is a member of along with their signals data.
+    
+    This enhanced endpoint provides detailed information about each signal associated with the groups,
+    including whether the current user has edit permissions for each signal. This is useful for:
+    
+    - Displaying a dashboard of all signals a user can access through their groups
+    - Showing which signals the user can edit vs. view-only
+    - Building collaborative workflows where users can see their assigned signals
+    
+    The response includes all signal details plus a `can_edit` flag for each signal indicating
+    if the current user has edit permissions based on the group's collaborator_map.
+    """
+    if not user.id:
+        raise exceptions.not_found
+    
+    # Get groups with signals for this user
+    user_groups_with_signals = await db.get_user_groups_with_signals(cursor, user.id)
+    return user_groups_with_signals
 
 
 @router.post("", response_model=UserGroup, dependencies=[Depends(require_admin)])
