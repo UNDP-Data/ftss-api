@@ -5,16 +5,43 @@ services:
     env_file: .env
     environment:
       - DB_CONNECTION=postgresql://postgres:password@db:5432/postgres
+      - ENV_MODE=local
     ports:
       - "8000:8000"
+    volumes:
+      - .:/app
     depends_on:
-      - db
+      db:
+        condition: service_healthy
+    command: >
+      sh -c "sleep 5 && uvicorn main:app --host 0.0.0.0 --port 8000 --reload"
   db:
     image: postgres:16.4-alpine
     environment:
       POSTGRES_PASSWORD: password
+      POSTGRES_DB: postgres
     ports:
-      - "5432:5432"
+      - 5432:5432
     volumes:
-      - ./sql:/docker-entrypoint-initdb.d
+      - postgres_data:/var/lib/postgresql/data
+      - ./sql/create_tables.sql:/docker-entrypoint-initdb.d/1-create_tables.sql
+      - ./sql/import_data.sql:/docker-entrypoint-initdb.d/2-import_data.sql
+      - ./sql/init_test_data.sql:/docker-entrypoint-initdb.d/3-init_test_data.sql
+      - ./sql/add_secondary_location.sql:/app/sql/add_secondary_location.sql
       - ./data:/docker-entrypoint-initdb.d/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+  adminer:
+    image: adminer
+    restart: always
+    ports:
+      - 4040:8080
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  postgres_data:

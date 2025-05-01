@@ -2,7 +2,8 @@
 Entity (model) definitions for signal objects.
 """
 
-from pydantic import ConfigDict, Field
+from typing import List, Dict
+from pydantic import ConfigDict, Field, field_validator, model_validator
 
 from . import utils
 from .base import BaseEntity
@@ -24,20 +25,57 @@ class Signal(BaseEntity):
         default=None,
         description="Region and/or country for which this signal has greatest relevance.",
     )
+    secondary_location: list[str] | None = Field(
+        default=None,
+        description="Additional regions and/or countries for which this signal has relevance.",
+    )
     score: utils.Score | None = Field(default=None)
     connected_trends: list[int] | None = Field(
         default=None,
         description="IDs of trends connected to this signal.",
     )
+    favorite: bool = Field(
+        default=False,
+        description="Whether the current user has favorited this signal.",
+    )
+    is_draft: bool = Field(
+        default=True,
+        description="Whether the signal is in draft state or published.",
+    )
+    group_ids: List[int] | None = Field(
+        default=None,
+        description="List of user group IDs associated with this signal.",
+    )
+    collaborators: List[int] | None = Field(
+        default=None,
+        description="List of user IDs who can collaborate on this signal.",
+    )
+
+    @model_validator(mode='before')
+    @classmethod
+    def convert_secondary_location(cls, data):
+        """Convert string secondary_location to a list before validation."""
+        if isinstance(data, dict) and 'secondary_location' in data:
+            if isinstance(data['secondary_location'], str):
+                data['secondary_location'] = [data['secondary_location']]
+        return data
 
     model_config = ConfigDict(
         json_schema_extra={
-            "example": BaseEntity.model_config["json_schema_extra"]["example"]
-            | {
+            "example": {
+                "id": 1,
+                "created_unit": "HQ",
                 "url": "https://undp.medium.com/the-cost-of-corruption-a827306696fb",
                 "relevance": "Of the approximately US$13 trillion that governments spend on public spending, up to 25 percent is lost to corruption.",
                 "keywords": ["economy", "governance"],
                 "location": "Global",
+                "favorite": False,
+                "is_draft": True,
+                "group_ids": [1, 2],
+                "collaborators": [1, 2, 3],
+                "secondary_location": ["Africa", "Asia"],
+                "score": None,
+                "connected_trends": [101, 102],
             }
         }
     )
