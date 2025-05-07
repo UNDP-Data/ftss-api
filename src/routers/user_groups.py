@@ -94,7 +94,7 @@ async def list_user_groups(
         raise
 
 
-@router.get("/me", response_model=List[UserGroup])
+@router.get("/me")
 async def get_my_user_groups(
     request: Request,
     user: User = Depends(authenticate_user),
@@ -110,7 +110,7 @@ async def get_my_user_groups(
             raise exceptions.not_found
         
         # Get groups this user is a member of
-        user_groups = await db.get_user_groups(cursor, user.id)
+        user_groups = await db.get_user_groups_with_signals_and_users(cursor, user.id)
         logger.info(f"User {user.id} retrieved {len(user_groups)} groups")
         return user_groups
     except Exception as e:
@@ -183,6 +183,7 @@ async def get_my_user_groups_with_signals(
 async def create_user_group(
     request: Request,
     group_data: UserGroupCreate,
+    current_user: User = Depends(authenticate_user),  # Get the current user
     cursor: AsyncCursor = Depends(db.yield_cursor),
 ):
     """Create a new user group."""
@@ -190,21 +191,32 @@ async def create_user_group(
         # Create the base group
         group = UserGroup(name=group_data.name)
         
+        # Initialize user_ids list with the current user's ID
+        user_ids = []
+        if current_user.id:
+            user_ids.append(current_user.id)
+        
         # Handle email addresses if provided
         if group_data.users:
-            user_ids = []
             for email in group_data.users:
                 user = await db.read_user_by_email(cursor, email)
-                if user and user.id:
+                if user and user.id and user.id not in user_ids:  # Avoid duplicates
                     user_ids.append(user.id)
-            
-            if user_ids:
-                group.user_ids = user_ids
         
+        if user_ids:
+            group.user_ids = user_ids
+            
         # Create the group
         group_id = await db.create_user_group(cursor, group)
-        logger.info(f"Created user group {group_id} with name '{group.name}'")
-        return await db.read_user_group(cursor, group_id)
+        logger.info(f"Created user group {group_id} with name '{group.name}' and {len(user_ids)} users")
+        
+        # Retrieve and return the created group
+        created_group = await db.read_user_group(cursor, group_id)
+        if not created_group:
+            logger.error(f"Failed to retrieve newly created group with ID {group_id}")
+            raise exceptions.not_found
+            
+        return created_group
     except Exception as e:
         logger.error(f"Error creating user group: {str(e)}")
         bugsnag.notify(
@@ -216,7 +228,8 @@ async def create_user_group(
                 },
                 "group_data": {
                     "name": group_data.name,
-                    "users_count": len(group_data.users) if group_data.users else 0
+                    "users_count": len(group_data.users) if group_data.users else 0,
+                    "current_user_id": current_user.id if current_user else None
                 }
             }
         )

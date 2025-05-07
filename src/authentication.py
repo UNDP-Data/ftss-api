@@ -4,6 +4,7 @@ Dependencies for API authentication using JWT tokens from Microsoft Entra.
 
 import logging
 import os
+from typing import Dict, Any, Optional, cast
 
 import httpx
 import jwt
@@ -18,7 +19,7 @@ from .entities import Role, User
 api_key_header = APIKeyHeader(
     name="access_token",
     description="The API access token for the application.",
-    auto_error=True,
+    auto_error=False,
 )
 
 
@@ -67,10 +68,10 @@ async def get_jwk(token: str) -> jwt.PyJWK:
         jwks = await get_jwks()
     except httpx.HTTPError:
         jwks = {}
-    jwk = jwks.get(header["kid"])
-    if jwk is None:
+    jwk_dict = jwks.get(header["kid"])
+    if jwk_dict is None:
         raise ValueError("JWK could not be obtained or found")
-    jwk = jwt.PyJWK.from_dict(jwk, "RS256")
+    jwk = jwt.PyJWK.from_dict(jwk_dict, "RS256")
     return jwk
 
 
@@ -108,7 +109,7 @@ async def decode_token(token: str) -> dict:
 
 
 async def authenticate_user(
-    token: str = Security(api_key_header),
+    token: Optional[str] = Security(api_key_header),
     cursor: AsyncCursor = Depends(db.yield_cursor),
 ) -> User:
     """
@@ -130,38 +131,78 @@ async def authenticate_user(
     user : User
         Pydantic model for a User object (if authentication succeeded).
     """
-    logging.debug(f"Authenticating user with token")
-    if os.environ.get("TEST_USER_TOKEN"): 
-        token = os.environ.get("TEST_USER_TOKEN")
+    logging.debug("Authenticating user with token")
+    
+    # For local development environment
     if os.environ.get("ENV_MODE") == "local":
-        # defaul user data
-        user_data = {
-            "email": "test.user@undp.org",
-            "name": "Test User",
-            "unit": "Data Futures Exchange (DFx)",
-            "acclab": False,
-        }
+        # Use test token if available
+        if os.environ.get("TEST_USER_TOKEN"):
+            test_token = os.environ.get("TEST_USER_TOKEN")
+            if test_token is not None:
+                token = test_token
+                
+        # Default user data for local development
+        local_email = "test.user@undp.org"
+        name = "Test User"
+        unit = "Data Futures Exchange (DFx)"
+        acclab = False
+        
+        # Check for specific test tokens
         if token == "test-admin-token":
-            user_data["role"] = Role.ADMIN
-            return User(**user_data)
+            return User(
+                email=local_email,
+                name=name,
+                unit=unit,
+                acclab=acclab,
+                role=Role.ADMIN
+            )
         elif token == "test-user-token":
-            user_data["role"] = Role.USER
-            return User(**user_data)
+            return User(
+                email=local_email,
+                name=name,
+                unit=unit,
+                acclab=acclab,
+                role=Role.USER
+            )
+        else:
+            # In local mode, if no valid token is provided, default to an admin user
+            logging.info("LOCAL MODE: No valid token provided, using default admin user")
+            return User(
+                email=local_email,
+                name=name,
+                unit=unit,
+                acclab=acclab,
+                role=Role.ADMIN
+            )
 
-    if token == os.environ.get("API_KEY"):
+    # Check for API key access
+    if token and token == os.environ.get("API_KEY"):
         if os.environ.get("ENV") == "dev":
             return User(email="name.surname@undp.org", role=Role.ADMIN)
         else:
             # dummy user object for anonymous access
             return User(email="name.surname@undp.org", role=Role.VISITOR)
+    
+    # If no token provided in non-local mode
+    if not token:
+        raise exceptions.not_authenticated
+        
+    # Try to decode and verify the token
     try:
         payload = await decode_token(token)
     except jwt.exceptions.PyJWTError as e:
         raise exceptions.not_authenticated from e
-    email, name = payload.get("unique_name"), payload.get("name")
-    if email is None or name is None:
+        
+    payload_email = payload.get("unique_name")
+    payload_name = payload.get("name")
+    
+    if payload_email is None or payload_name is None:
         raise exceptions.not_authenticated
-    if (user := await db.read_user_by_email(cursor, email)) is None:
-        user = User(email=email, role=Role.USER, name=name)
+        
+    email_str = str(payload_email)  # Convert to string to satisfy type checker
+    name_str = str(payload_name)    # Convert to string to satisfy type checker
+    
+    if (user := await db.read_user_by_email(cursor, email_str)) is None:
+        user = User(email=email_str, role=Role.USER, name=name_str)
         await db.create_user(cursor, user)
     return user

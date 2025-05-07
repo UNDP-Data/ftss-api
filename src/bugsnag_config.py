@@ -10,7 +10,7 @@ from bugsnag.asgi import BugsnagMiddleware
 
 # Get API key from environment variable with fallback to the provided key
 BUGSNAG_API_KEY = os.environ.get("BUGSNAG_API_KEY")
-ENVIRONMENT = os.environ.get("ENVIRONMENT", "development")
+ENVIRONMENT = os.environ.get("ENVIRONMENT")
 RELEASE_VERSION = os.environ.get("RELEASE_VERSION", "dev")
 
 if not BUGSNAG_API_KEY:
