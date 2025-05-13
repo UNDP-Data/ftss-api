@@ -4,7 +4,7 @@ A router for managing user groups.
 
 import logging
 import bugsnag
-from typing import Annotated, List, Optional, Union
+from typing import Annotated, List, Optional, Union, Dict
 
 from fastapi import APIRouter, Depends, Path, Body, Query, HTTPException, Request
 from psycopg import AsyncCursor
@@ -13,8 +13,9 @@ from pydantic import BaseModel
 from .. import database as db
 from .. import exceptions
 from ..dependencies import require_admin, require_user
-from ..entities import UserGroup, User, UserGroupWithSignals
+from ..entities import UserGroup, User, UserGroupWithSignals, UserGroupWithUsers, UserGroupComplete, Signal
 from ..authentication import authenticate_user
+from ..database.signals import read_signal
 
 # Set up logger for this module
 logger = logging.getLogger(__name__)
@@ -26,6 +27,27 @@ router = APIRouter(prefix="/user-groups", tags=["user groups"])
 class UserGroupCreate(BaseModel):
     name: str
     users: Optional[List[str]] = None
+
+
+class UserGroupUpdate(BaseModel):
+    id: int
+    name: str
+    signal_ids: List[int] = []
+    user_ids: List[Union[str, int]] = []  # Can be either user IDs or email addresses
+    collaborator_map: Dict[str, List[int]] = {}
+    created_at: Optional[str] = None
+    status: Optional[str] = None
+    created_by: Optional[str] = None
+    created_for: Optional[str] = None
+    modified_at: Optional[str] = None
+    modified_by: Optional[str] = None
+    headline: Optional[str] = None
+    attachment: Optional[str] = None
+    steep_primary: Optional[str] = None
+    steep_secondary: Optional[str] = None
+    signature_primary: Optional[str] = None
+    signature_secondary: Optional[str] = None
+    sdgs: Optional[List[str]] = None
 
 
 class UserEmailIdentifier(BaseModel):
@@ -94,7 +116,7 @@ async def list_user_groups(
         raise
 
 
-@router.get("/me")
+@router.get("/me", response_model=List[UserGroup])
 async def get_my_user_groups(
     request: Request,
     user: User = Depends(authenticate_user),
@@ -110,7 +132,7 @@ async def get_my_user_groups(
             raise exceptions.not_found
         
         # Get groups this user is a member of
-        user_groups = await db.get_user_groups_with_signals_and_users(cursor, user.id)
+        user_groups = await db.get_user_groups_with_users_by_user_id(cursor, user.id)
         logger.info(f"User {user.id} retrieved {len(user_groups)} groups")
         return user_groups
     except Exception as e:
@@ -132,32 +154,40 @@ async def get_my_user_groups(
         raise
 
 
-@router.get("/me/with-signals", response_model=List[UserGroupWithSignals])
+@router.get("/me/with-signals", response_model=List[Union[UserGroupWithSignals, UserGroupComplete]])
 async def get_my_user_groups_with_signals(
     request: Request,
     user: User = Depends(authenticate_user),
     cursor: AsyncCursor = Depends(db.yield_cursor),
+    include_users: bool = Query(True, description="If true, includes detailed user information for each group member (defaults to true)")
 ):
     """
     Get all user groups that the current user is a member of along with their signals data.
-    
+
     This enhanced endpoint provides detailed information about each signal associated with the groups,
     including whether the current user has edit permissions for each signal. This is useful for:
-    
+
     - Displaying a dashboard of all signals a user can access through their groups
     - Showing which signals the user can edit vs. view-only
     - Building collaborative workflows where users can see their assigned signals
-    
+
     The response includes all signal details plus a `can_edit` flag for each signal indicating
     if the current user has edit permissions based on the group's collaborator_map.
+
+    By default, detailed user information for each group member is included. Set the `include_users`
+    parameter to false to get only basic user ID references without detailed user information.
     """
     try:
         if not user.id:
             logger.warning("User ID not found in get_my_user_groups_with_signals")
             raise exceptions.not_found
-        
-        # Get groups with signals for this user
-        user_groups_with_signals = await db.get_user_groups_with_signals(cursor, user.id)
+
+        # Get groups with signals for this user, optionally including full user details
+        user_groups_with_signals = await db.get_user_groups_with_signals(
+            cursor,
+            user.id,
+            fetch_users=include_users
+        )
         logger.info(f"User {user.id} retrieved {len(user_groups_with_signals)} groups with signals")
         return user_groups_with_signals
     except Exception as e:
@@ -179,43 +209,49 @@ async def get_my_user_groups_with_signals(
         raise
 
 
-@router.post("", response_model=UserGroup, dependencies=[Depends(require_admin)])
+@router.post("", response_model=Union[UserGroup, UserGroupWithUsers], dependencies=[Depends(require_admin)])
 async def create_user_group(
     request: Request,
     group_data: UserGroupCreate,
     current_user: User = Depends(authenticate_user),  # Get the current user
     cursor: AsyncCursor = Depends(db.yield_cursor),
+    include_users: bool = Query(False, description="If true, includes detailed user information for each group member")
 ):
-    """Create a new user group."""
+    """
+    Create a new user group.
+
+    Optionally include detailed user information for each group member in the response
+    by setting the `include_users` query parameter to true.
+    """
     try:
         # Create the base group
         group = UserGroup(name=group_data.name)
-        
+
         # Initialize user_ids list with the current user's ID
         user_ids = []
         if current_user.id:
             user_ids.append(current_user.id)
-        
+
         # Handle email addresses if provided
         if group_data.users:
             for email in group_data.users:
                 user = await db.read_user_by_email(cursor, email)
                 if user and user.id and user.id not in user_ids:  # Avoid duplicates
                     user_ids.append(user.id)
-        
+
         if user_ids:
             group.user_ids = user_ids
-            
+
         # Create the group
         group_id = await db.create_user_group(cursor, group)
         logger.info(f"Created user group {group_id} with name '{group.name}' and {len(user_ids)} users")
-        
+
         # Retrieve and return the created group
-        created_group = await db.read_user_group(cursor, group_id)
+        created_group = await db.read_user_group(cursor, group_id, fetch_details=include_users)
         if not created_group:
             logger.error(f"Failed to retrieve newly created group with ID {group_id}")
             raise exceptions.not_found
-            
+
         return created_group
     except Exception as e:
         logger.error(f"Error creating user group: {str(e)}")
@@ -236,18 +272,49 @@ async def create_user_group(
         raise
 
 
-@router.get("/{group_id}", response_model=UserGroup, dependencies=[Depends(require_admin)])
+@router.get("/{group_id}", response_model=Union[UserGroup, UserGroupWithUsers, UserGroupComplete], dependencies=[Depends(require_admin)])
 async def read_user_group(
     request: Request,
     group_id: Annotated[int, Path(description="The ID of the user group to retrieve")],
     cursor: AsyncCursor = Depends(db.yield_cursor),
+    include_users: bool = Query(True, description="If true, includes detailed user and signal information (defaults to true)")
 ):
-    """Get a user group by ID."""
+    """
+    Get a user group by ID with detailed information.
+
+    By default, includes detailed user and signal information. Set the `include_users`
+    parameter to false to get only the basic group data without user and signal details.
+    """
     try:
-        if (group := await db.read_user_group(cursor, group_id)) is None:
+        # First, get the basic group
+        if (group := await db.read_user_group(cursor, group_id, fetch_details=include_users)) is None:
             logger.warning(f"User group {group_id} not found")
             raise exceptions.not_found
-        logger.info(f"Retrieved user group {group_id}")
+
+        # Log basic info to avoid huge logs
+        logger.info(f"Retrieved user group {group_id} with name '{group.name}'")
+
+        # If include_users is true and the group has signals, fetch those signals too
+        if include_users and hasattr(group, 'user_ids') and group.user_ids and hasattr(group, 'signal_ids') and group.signal_ids:
+            # Get signals for this group and prepare a complete response
+            signals = []
+
+            # Import the signals database function directly
+            from ..database.signals import read_signal
+
+            # Fetch each signal individually
+            for signal_id in group.signal_ids:
+                signal = await read_signal(cursor, signal_id)
+                if signal:
+                    signals.append(signal)
+
+            # Convert to a UserGroupComplete if we have both users and signals
+            if hasattr(group, 'users') and group.users:
+                return UserGroupComplete(
+                    **group.model_dump(),
+                    signals=signals
+                )
+
         return group
     except Exception as e:
         if not isinstance(e, HTTPException):  # Don't log HTTPExceptions
@@ -265,23 +332,81 @@ async def read_user_group(
         raise
 
 
-@router.put("/{group_id}", response_model=UserGroup, dependencies=[Depends(require_admin)])
+@router.put("/{group_id}", response_model=Union[UserGroup, UserGroupWithUsers, UserGroupComplete], dependencies=[Depends(require_admin)])
 async def update_user_group(
     request: Request,
     group_id: Annotated[int, Path(description="The ID of the user group to update")],
-    group: UserGroup,
+    group_data: UserGroupUpdate,
     cursor: AsyncCursor = Depends(db.yield_cursor),
+    include_users: bool = Query(False, description="If true, includes detailed user information for each group member after update")
 ):
-    """Update a user group."""
+    """
+    Update a user group.
+
+    Optionally include detailed user information for each group member in the response
+    by setting the `include_users` query parameter to true.
+
+    This endpoint accepts both user IDs (integers) and email addresses (strings) in
+    the user_ids field. Email addresses will be automatically converted to user IDs.
+    """
     try:
-        if group_id != group.id:
-            logger.warning(f"ID mismatch: path ID {group_id} != body ID {group.id}")
+        if group_id != group_data.id:
+            logger.warning(f"ID mismatch: path ID {group_id} != body ID {group_data.id}")
             raise exceptions.id_mismatch
+
+        # Process user_ids field in case it contains emails instead of integer IDs
+        processed_user_ids = []
+        for user_id in group_data.user_ids:
+            if isinstance(user_id, str):
+                # Check if it's an email (contains @ sign)
+                if '@' in user_id:
+                    # This looks like an email address, try to find the user ID
+                    user = await db.read_user_by_email(cursor, user_id)
+                    if user and user.id:
+                        processed_user_ids.append(user.id)
+                    else:
+                        logger.warning(f"User with email {user_id} not found")
+                        raise HTTPException(status_code=404, detail=f"User with email {user_id} not found")
+                else:
+                    # String but not an email, try to convert to int if it's a digit string
+                    try:
+                        processed_user_ids.append(int(user_id))
+                    except (ValueError, TypeError):
+                        logger.warning(f"Invalid user ID format: {user_id}")
+                        raise HTTPException(status_code=400, detail=f"Invalid user ID format: {user_id}")
+            else:
+                # Already an int
+                processed_user_ids.append(user_id)
+
+        logger.info(f"Processed user_ids: {processed_user_ids}")
+
+        # Convert UserGroupUpdate to UserGroup
+        group = UserGroup(
+            id=group_data.id,
+            name=group_data.name,
+            signal_ids=group_data.signal_ids,
+            user_ids=processed_user_ids,  # Use the processed user IDs
+            collaborator_map=group_data.collaborator_map,
+            created_at=group_data.created_at,
+            status=group_data.status,
+            created_by=group_data.created_by,
+            created_for=group_data.created_for,
+            modified_at=group_data.modified_at,
+            modified_by=group_data.modified_by,
+            headline=group_data.headline,
+            attachment=group_data.attachment,
+            steep_primary=group_data.steep_primary,
+            steep_secondary=group_data.steep_secondary,
+            signature_primary=group_data.signature_primary,
+            signature_secondary=group_data.signature_secondary,
+            sdgs=group_data.sdgs
+        )
+
         if (updated_id := await db.update_user_group(cursor, group)) is None:
             logger.warning(f"User group {group_id} not found for update")
             raise exceptions.not_found
         logger.info(f"Updated user group {updated_id}")
-        return await db.read_user_group(cursor, updated_id)
+        return await db.read_user_group(cursor, updated_id, fetch_details=include_users)
     except Exception as e:
         if not isinstance(e, HTTPException):  # Don't log HTTPExceptions
             logger.error(f"Error updating user group {group_id}: {str(e)}")
@@ -294,10 +419,10 @@ async def update_user_group(
                     },
                     "group_id": group_id,
                     "group_data": {
-                        "id": group.id,
-                        "name": group.name,
-                        "user_count": len(group.user_ids) if group.user_ids else 0,
-                        "signal_count": len(group.signal_ids) if group.signal_ids else 0
+                        "id": group_data.id,
+                        "name": group_data.name,
+                        "user_count": len(group_data.user_ids) if group_data.user_ids else 0,
+                        "signal_count": len(group_data.signal_ids) if group_data.signal_ids else 0
                     }
                 }
             )

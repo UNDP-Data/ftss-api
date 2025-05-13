@@ -5,6 +5,7 @@ CRUD operations for user group entities.
 from psycopg import AsyncCursor
 import json
 import logging
+from typing import List
 
 from ..entities import UserGroup, Signal, User, UserGroupWithSignals, UserGroupWithUsers, UserGroupComplete
 
@@ -23,10 +24,55 @@ __all__ = [
     "get_user_group_with_users",
     "list_user_groups_with_users",
     "get_user_groups_with_signals_and_users",
+    "get_user_groups_with_users_by_user_id",
 ]
 
 logger = logging.getLogger(__name__)
 
+# SQL Query Constants
+SQL_SELECT_USER_GROUP = """
+    SELECT 
+        id, 
+        name,
+        signal_ids,
+        user_ids,
+        collaborator_map
+    FROM 
+        user_groups
+"""
+
+SQL_SELECT_USERS = """
+    SELECT 
+        id, 
+        email, 
+        role, 
+        name, 
+        unit, 
+        acclab,
+        created_at
+    FROM 
+        users
+    WHERE 
+        id = ANY(%s)
+    ORDER BY 
+        name
+"""
+
+SQL_SELECT_SIGNALS = """
+    SELECT 
+        s.*,
+        array_agg(c.trend_id) FILTER (WHERE c.trend_id IS NOT NULL) AS connected_trends
+    FROM 
+        signals s
+    LEFT JOIN 
+        connections c ON s.id = c.signal_id
+    WHERE 
+        s.id = ANY(%s)
+    GROUP BY 
+        s.id
+    ORDER BY 
+        s.id
+"""
 
 def handle_user_group_row(row) -> dict:
     """
@@ -68,6 +114,30 @@ def handle_user_group_row(row) -> dict:
             data['collaborator_map'] = collab_map
     
     return data
+
+async def get_users_for_group(cursor: AsyncCursor, user_ids: List[int]) -> List[User]:
+    """
+    Helper function to fetch user details for a group.
+    
+    Parameters
+    ----------
+    cursor : AsyncCursor
+        An async database cursor.
+    user_ids : List[int]
+        List of user IDs to fetch.
+        
+    Returns
+    -------
+    List[User]
+        List of User objects.
+    """
+    users = []
+    if user_ids:
+        await cursor.execute(SQL_SELECT_USERS, (user_ids,))
+        async for row in cursor:
+            user_data = dict(row)
+            users.append(User(**user_data))
+    return users
 
 
 async def create_user_group(cursor: AsyncCursor, group: UserGroup) -> int:
@@ -120,7 +190,7 @@ async def create_user_group(cursor: AsyncCursor, group: UserGroup) -> int:
     return group_id
 
 
-async def read_user_group(cursor: AsyncCursor, group_id: int) -> UserGroup | None:
+async def read_user_group(cursor: AsyncCursor, group_id: int, fetch_details: bool = False) -> UserGroup | UserGroupWithUsers | None:
     """
     Read a user group from the database.
 
@@ -130,31 +200,28 @@ async def read_user_group(cursor: AsyncCursor, group_id: int) -> UserGroup | Non
         An async database cursor.
     group_id : int
         The ID of the user group to read.
+    fetch_details : bool, optional
+        If True, fetches detailed user information for each group member,
+        by default False
 
     Returns
     -------
-    UserGroup | None
-        The user group if found, otherwise None.
+    UserGroup | UserGroupWithUsers | None
+        The user group if found (with optional detailed user data), otherwise None.
     """
-    query = """
-        SELECT 
-            id, 
-            name,
-            signal_ids,
-            user_ids,
-            collaborator_map
-        FROM 
-            user_groups
-        WHERE 
-            id = %s
-        ;
-    """
+    query = f"{SQL_SELECT_USER_GROUP} WHERE id = %s;"
     await cursor.execute(query, (group_id,))
     if (row := await cursor.fetchone()) is None:
         return None
-    
+
     data = handle_user_group_row(row)
-    return UserGroup(**data)
+
+    if fetch_details:
+        # Fetch detailed user information if requested
+        users = await get_users_for_group(cursor, data['user_ids'])
+        return UserGroupWithUsers(**data, users=users)
+    else:
+        return UserGroup(**data)
 
 
 async def update_user_group(cursor: AsyncCursor, group: UserGroup) -> int | None:
@@ -235,19 +302,7 @@ async def list_user_groups(cursor: AsyncCursor) -> list[UserGroup]:
     list[UserGroup]
         A list of all user groups.
     """
-    query = """
-        SELECT 
-            id, 
-            name,
-            signal_ids,
-            user_ids,
-            collaborator_map
-        FROM 
-            user_groups
-        ORDER BY 
-            name
-        ;
-    """
+    query = f"{SQL_SELECT_USER_GROUP} ORDER BY name;"
     await cursor.execute(query)
     result = []
     
@@ -387,21 +442,7 @@ async def get_user_groups(cursor: AsyncCursor, user_id: int) -> list[UserGroup]:
     list[UserGroup]
         A list of user groups.
     """
-    query = """
-        SELECT 
-            id, 
-            name,
-            signal_ids,
-            user_ids,
-            collaborator_map
-        FROM 
-            user_groups
-        WHERE 
-            %s = ANY(user_ids)
-        ORDER BY 
-            name
-        ;
-    """
+    query = f"{SQL_SELECT_USER_GROUP} WHERE %s = ANY(user_ids) ORDER BY name;"
     await cursor.execute(query, (user_id,))
     result = []
     
@@ -440,7 +481,7 @@ async def get_group_users(cursor: AsyncCursor, group_id: int) -> list[int]:
     return row[0] if row and row[0] else []
 
 
-async def get_user_groups_with_signals(cursor: AsyncCursor, user_id: int) -> list[UserGroupWithSignals]:
+async def get_user_groups_with_signals(cursor: AsyncCursor, user_id: int, fetch_users: bool = False) -> list[UserGroupWithSignals]:
     """
     Get all groups that a user is a member of, along with the associated signals data.
 
@@ -450,91 +491,72 @@ async def get_user_groups_with_signals(cursor: AsyncCursor, user_id: int) -> lis
         An async database cursor.
     user_id : int
         The ID of the user.
+    fetch_users : bool, optional
+        If True, also fetches detailed user information for each group member,
+        by default False
 
     Returns
     -------
     list[UserGroupWithSignals]
-        A list of user groups with associated signals.
+        A list of user groups with associated signals and optional user details.
     """
     logger.debug("Getting user groups with signals for user_id: %s", user_id)
-    
+
     # First get the groups the user belongs to
     user_groups = await get_user_groups(cursor, user_id)
     result = []
-    
+
     # For each group, fetch the signals data
     for group in user_groups:
         group_data = group.model_dump()
         signals = []
-        users = []
-        
+
         # Get signals for this group
         if group.signal_ids:
             logger.debug("Fetching signals for group_id: %s, signal_ids: %s", group.id, group.signal_ids)
-            signals_query = """
-                SELECT 
-                    s.*,
-                    array_agg(c.trend_id) FILTER (WHERE c.trend_id IS NOT NULL) AS connected_trends
-                FROM 
-                    signals s
-                LEFT JOIN 
-                    connections c ON s.id = c.signal_id
-                WHERE 
-                    s.id = ANY(%s)
-                GROUP BY 
-                    s.id
-                ORDER BY 
-                    s.id
-                ;
-            """
-            await cursor.execute(signals_query, (group.signal_ids,))
-            
-            async for row in cursor:
-                signal_dict = dict(row)
-                # Check if user is a collaborator for this signal
-                can_edit = False
-                signal_id_str = str(signal_dict["id"])
-                
-                if group.collaborator_map and signal_id_str in group.collaborator_map:
-                    if user_id in group.collaborator_map[signal_id_str]:
-                        can_edit = True
-                
-                signal_dict["can_edit"] = can_edit
-                signals.append(Signal(**signal_dict))
-        
-        # Get users for this group
-        if group.user_ids:
-            logger.debug("Fetching users for group_id: %s, user_ids: %s", group.id, group.user_ids)
-            users_query = """
-                SELECT 
-                    id, 
-                    email, 
-                    role, 
-                    name, 
-                    unit, 
-                    acclab,
-                    created_at
-                FROM 
-                    users
-                WHERE 
-                    id = ANY(%s)
-                ORDER BY 
-                    name
-                ;
-            """
-            await cursor.execute(users_query, (group.user_ids,))
-            
-            async for row in cursor:
-                user_data = dict(row)
-                users.append(User(**user_data))
-        
+
+            # Import read_signal function directly
+            from .signals import read_signal
+
+            # Get each signal individually
+            for signal_id in group.signal_ids:
+                signal = await read_signal(cursor, signal_id)
+                if signal:
+                    # Check if user is a collaborator for this signal
+                    can_edit = False
+                    signal_id_str = str(signal_id)
+
+                    if group.collaborator_map and signal_id_str in group.collaborator_map:
+                        if user_id in group.collaborator_map[signal_id_str]:
+                            can_edit = True
+
+                    # Create a copy of the signal with can_edit flag
+                    signal_dict = signal.model_dump()
+                    signal_dict["can_edit"] = can_edit
+                    signals.append(Signal(**signal_dict))
+
+        # Fetch full user details if requested
+        users = []
+        if fetch_users and group.user_ids:
+            users = await get_users_for_group(cursor, group.user_ids)
+
         # Create a UserGroupWithSignals instance
-        group_with_signals = UserGroupWithSignals(
-            **group_data,
-            signals=signals
-        )
+        if fetch_users:
+            # If we fetched user details, create a UserGroupComplete
+            group_with_signals = UserGroupComplete(
+                **group_data,
+                signals=signals,
+                users=users
+            )
+        else:
+            # Otherwise create a UserGroupWithSignals
+            group_with_signals = UserGroupWithSignals(
+                **group_data,
+                signals=signals
+            )
+
         result.append(group_with_signals)
-    
+
     logger.debug("Found %s user groups with signals for user_id: %s", len(result), user_id)
     return result
 
@@ -609,39 +631,7 @@ async def get_user_group_with_users(cursor: AsyncCursor, group_id: int) -> UserG
     
     # Convert to dict for modification
     group_data = group.model_dump()
-    users = []
-    
-    # If there are users in the group, fetch their details
-    if group.user_ids:
-        logger.debug("Fetching users for group_id: %s, user_ids: %s", group_id, group.user_ids)
-        users_query = """
-            SELECT 
-                id, 
-                email, 
-                role, 
-                name, 
-                unit, 
-                acclab,
-                created_at
-            FROM 
-                users
-            WHERE 
-                id = ANY(%s)
-            ORDER BY 
-                name
-            ;
-        """
-        await cursor.execute(users_query, (group.user_ids,))
-        
-        user_count = 0
-        async for row in cursor:
-            user_data = dict(row)
-            users.append(User(**user_data))
-            user_count += 1
-        
-        logger.debug("Found %s users for group_id: %s", user_count, group_id)
-    else:
-        logger.debug("No users found for group_id: %s", group_id)
+    users = await get_users_for_group(cursor, group.user_ids)
     
     # Create a UserGroupWithUsers instance
     return UserGroupWithUsers(**group_data, users=users)
@@ -670,37 +660,7 @@ async def list_user_groups_with_users(cursor: AsyncCursor) -> list[UserGroupWith
     # For each group, get user details
     for group in groups:
         group_data = group.model_dump()
-        users = []
-        
-        # If there are users in the group, fetch their details
-        if group.user_ids:
-            logger.debug("Fetching users for group_id: %s, user_ids: %s", group.id, group.user_ids)
-            users_query = """
-                SELECT 
-                    id, 
-                    email, 
-                    role, 
-                    name, 
-                    unit, 
-                    acclab,
-                    created_at
-                FROM 
-                    users
-                WHERE 
-                    id = ANY(%s)
-                ORDER BY 
-                    name
-                ;
-            """
-            await cursor.execute(users_query, (group.user_ids,))
-            
-            user_count = 0
-            async for row in cursor:
-                user_data = dict(row)
-                users.append(User(**user_data))
-                user_count += 1
-            
-            logger.debug("Found %s users for group_id: %s", user_count, group.id)
+        users = await get_users_for_group(cursor, group.user_ids)
         
         # Create a UserGroupWithUsers instance
         group_with_users = UserGroupWithUsers(**group_data, users=users)
@@ -736,28 +696,11 @@ async def get_user_groups_with_signals_and_users(cursor: AsyncCursor, user_id: i
     for group in user_groups:
         group_data = group.model_dump()
         signals = []
-        users = []
         
         # Get signals for this group
         if group.signal_ids:
             logger.debug("Fetching signals for group_id: %s, signal_ids: %s", group.id, group.signal_ids)
-            signals_query = """
-                SELECT 
-                    s.*,
-                    array_agg(c.trend_id) FILTER (WHERE c.trend_id IS NOT NULL) AS connected_trends
-                FROM 
-                    signals s
-                LEFT JOIN 
-                    connections c ON s.id = c.signal_id
-                WHERE 
-                    s.id = ANY(%s)
-                GROUP BY 
-                    s.id
-                ORDER BY 
-                    s.id
-                ;
-            """
-            await cursor.execute(signals_query, (group.signal_ids,))
+            await cursor.execute(SQL_SELECT_SIGNALS, (group.signal_ids,))
             
             signal_count = 0
             async for row in cursor:
@@ -780,41 +723,47 @@ async def get_user_groups_with_signals_and_users(cursor: AsyncCursor, user_id: i
             logger.debug("Found %s signals for group_id: %s", signal_count, group.id)
         
         # Get users for this group
-        if group.user_ids:
-            logger.debug("Fetching users for group_id: %s, user_ids: %s", group.id, group.user_ids)
-            users_query = """
-                SELECT 
-                    id, 
-                    email, 
-                    role, 
-                    name, 
-                    unit, 
-                    acclab,
-                    created_at
-                FROM 
-                    users
-                WHERE 
-                    id = ANY(%s)
-                ORDER BY 
-                    name
-                ;
-            """
-            await cursor.execute(users_query, (group.user_ids,))
-            
-            user_count = 0
-            async for row in cursor:
-                user_data = dict(row)
-                
-                # Create User instance
-                user = User(**user_data)
-                users.append(user)
-                user_count += 1
-            
-            logger.debug("Found %s users for group_id: %s", user_count, group.id)
+        users = await get_users_for_group(cursor, group.user_ids)
         
         # Create a UserGroupComplete instance
         group_complete = UserGroupComplete(**group_data, signals=signals, users=users)
         result.append(group_complete)
     
     logger.debug("Found %s user groups with signals and users for user_id: %s", len(result), user_id)
+    return result
+
+
+async def get_user_groups_with_users_by_user_id(cursor: AsyncCursor, user_id: int) -> list[UserGroupWithUsers]:
+    """
+    Get all groups that a user is a member of, along with detailed user information for each group member.
+    This is a more focused version that only fetches user data, not signals.
+
+    Parameters
+    ----------
+    cursor : AsyncCursor
+        An async database cursor.
+    user_id : int
+        The ID of the user.
+
+    Returns
+    -------
+    list[UserGroupWithUsers]
+        A list of user groups with detailed user information.
+    """
+    logger.debug("Getting user groups with users for user_id: %s", user_id)
+    
+    # First get the groups the user belongs to
+    query = f"{SQL_SELECT_USER_GROUP} WHERE %s = ANY(user_ids) ORDER BY name;"
+    await cursor.execute(query, (user_id,))
+    result = []
+    
+    async for row in cursor:
+        group_data = handle_user_group_row(row)
+        users = await get_users_for_group(cursor, group_data['user_ids'])
+        
+        # Create a UserGroupWithUsers instance
+        group_with_users = UserGroupWithUsers(**group_data, users=users)
+        result.append(group_with_users)
+    
+    logger.debug("Found %s user groups with users for user_id: %s", len(result), user_id)
     return result

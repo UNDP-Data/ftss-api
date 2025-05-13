@@ -23,9 +23,9 @@ class UserGroup(BaseEntity):
         default_factory=list,
         description="List of signal IDs associated with this group."
     )
-    user_ids: List[int] = Field(
+    user_ids: List[str | int] = Field(
         default_factory=list,
-        description="List of user IDs who are members of this group."
+        description="List of user IDs (integers) or emails (strings) who are members of this group."
     )
     collaborator_map: Dict[str, List[int]] = Field(
         default_factory=dict,
