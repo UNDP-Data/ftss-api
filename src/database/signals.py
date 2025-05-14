@@ -2,15 +2,20 @@
 CRUD operations for signal entities.
 """
 
+import logging
+from typing import List
 from psycopg import AsyncCursor, sql
 
 from .. import storage
-from ..entities import Signal, SignalFilters, SignalPage, Status
+from ..entities import Signal, SignalFilters, SignalPage, Status, SignalWithUserGroups, UserGroup
+
+logger = logging.getLogger(__name__)
 
 __all__ = [
     "search_signals",
     "create_signal",
     "read_signal",
+    "read_signal_with_user_groups",
     "update_signal",
     "delete_signal",
     "read_user_signals",
@@ -102,10 +107,10 @@ async def search_signals(cursor: AsyncCursor, filters: SignalFilters) -> SignalP
     return page
 
 
-async def create_signal(cursor: AsyncCursor, signal: Signal) -> int:
+async def create_signal(cursor: AsyncCursor, signal: Signal, user_group_ids: List[int] = None) -> int:
     """
-    Insert a signal into the database, connect it to trends and upload an attachment
-    to Azure Blob Storage if applicable.
+    Insert a signal into the database, connect it to trends, upload an attachment
+    to Azure Blob Storage if applicable, and add it to user groups if specified.
 
     Parameters
     ----------
@@ -114,77 +119,131 @@ async def create_signal(cursor: AsyncCursor, signal: Signal) -> int:
     signal : Signal
         A signal object to insert. The following fields are supported:
         - secondary_location: list[str] | None
+    user_group_ids : List[int], optional
+        List of user group IDs to add the signal to.
 
     Returns
     -------
     signal_id : int
         An ID of the signal in the database.
     """
-    query = """
-        INSERT INTO signals (
-            status,
-            created_by,
-            created_for,
-            modified_by,
-            headline,
-            description,
-            steep_primary,
-            steep_secondary,
-            signature_primary,
-            signature_secondary,
-            sdgs, 
-            created_unit,
-            url,
-            relevance,
-            keywords,
-            location,
-            secondary_location,
-            score
-        )
-        VALUES (
-            %(status)s,
-            %(created_by)s,
-            %(created_for)s,
-            %(modified_by)s,
-            %(headline)s,
-            %(description)s, 
-            %(steep_primary)s,
-            %(steep_secondary)s,
-            %(signature_primary)s,
-            %(signature_secondary)s,
-            %(sdgs)s,
-            %(created_unit)s,
-            %(url)s,
-            %(relevance)s,
-            %(keywords)s,
-            %(location)s,
-            %(secondary_location)s,
-            %(score)s
-        )
-        RETURNING
-            id
-        ;
-    """
-    await cursor.execute(query, signal.model_dump())
-    row = await cursor.fetchone()
-    signal_id = row["id"]
+    logger.info(f"Creating new signal with headline: '{signal.headline}', created by: {signal.created_by}")
+    if user_group_ids:
+        logger.info(f"Will add signal to user groups: {user_group_ids}")
+    
+    # Insert signal into database
+    try:
+        query = """
+            INSERT INTO signals (
+                status,
+                created_by,
+                created_for,
+                modified_by,
+                headline,
+                description,
+                steep_primary,
+                steep_secondary,
+                signature_primary,
+                signature_secondary,
+                sdgs, 
+                created_unit,
+                url,
+                relevance,
+                keywords,
+                location,
+                secondary_location,
+                score
+            )
+            VALUES (
+                %(status)s,
+                %(created_by)s,
+                %(created_for)s,
+                %(modified_by)s,
+                %(headline)s,
+                %(description)s, 
+                %(steep_primary)s,
+                %(steep_secondary)s,
+                %(signature_primary)s,
+                %(signature_secondary)s,
+                %(sdgs)s,
+                %(created_unit)s,
+                %(url)s,
+                %(relevance)s,
+                %(keywords)s,
+                %(location)s,
+                %(secondary_location)s,
+                %(score)s
+            )
+            RETURNING
+                id
+            ;
+        """
+        await cursor.execute(query, signal.model_dump())
+        row = await cursor.fetchone()
+        signal_id = row["id"]
+        logger.info(f"Signal created successfully with ID: {signal_id}")
+    except Exception as e:
+        logger.error(f"Failed to create signal: {e}")
+        raise
 
-    # add connected trends if any are present
-    for trend_id in signal.connected_trends or []:
-        query = "INSERT INTO connections (signal_id, trend_id, created_by) VALUES (%s, %s, %s);"
-        await cursor.execute(query, (signal_id, trend_id, signal.created_by))
+    # Add connected trends if any are present
+    try:
+        if signal.connected_trends:
+            logger.info(f"Adding connected trends for signal {signal_id}: {signal.connected_trends}")
+            for trend_id in signal.connected_trends:
+                query = "INSERT INTO connections (signal_id, trend_id, created_by) VALUES (%s, %s, %s);"
+                await cursor.execute(query, (signal_id, trend_id, signal.created_by))
+            logger.info(f"Successfully added {len(signal.connected_trends)} trends to signal {signal_id}")
+    except Exception as e:
+        logger.error(f"Error adding connected trends to signal {signal_id}: {e}")
+        # Continue execution despite error with trends
 
-    # upload an image
+    # Upload an image if provided
     if signal.attachment is not None:
+        logger.info(f"Uploading image attachment for signal {signal_id}")
         try:
             blob_url = await storage.upload_image(
                 signal_id, "signals", signal.attachment
             )
-        except Exception as e:
-            print(e)
-        else:
             query = "UPDATE signals SET attachment = %s WHERE id = %s;"
             await cursor.execute(query, (blob_url, signal_id))
+            logger.info(f"Image attachment uploaded successfully for signal {signal_id}")
+        except Exception as e:
+            logger.error(f"Failed to upload image for signal {signal_id}: {e}")
+            # Continue execution despite attachment error
+    
+    # Add signal to user groups if specified
+    if user_group_ids:
+        logger.info(f"Processing user group assignments for signal {signal_id}")
+        from . import user_groups
+        groups_added = 0
+        groups_failed = 0
+        
+        for group_id in user_group_ids:
+            try:
+                logger.debug(f"Attempting to add signal {signal_id} to group {group_id}")
+                # Get the group
+                group = await user_groups.read_user_group(cursor, group_id)
+                if group is not None:
+                    # Add signal to group's signal_ids
+                    signal_ids = group.signal_ids or []
+                    if signal_id not in signal_ids:
+                        signal_ids.append(signal_id)
+                        group.signal_ids = signal_ids
+                        await user_groups.update_user_group(cursor, group)
+                        groups_added += 1
+                        logger.info(f"Signal {signal_id} added to group {group_id} ({group.name})")
+                    else:
+                        logger.info(f"Signal {signal_id} already in group {group_id} ({group.name})")
+                else:
+                    logger.warning(f"Group with ID {group_id} not found, skipping")
+                    groups_failed += 1
+            except Exception as e:
+                logger.error(f"Error adding signal {signal_id} to group {group_id}: {e}")
+                groups_failed += 1
+        
+        logger.info(f"User group assignment complete for signal {signal_id}: {groups_added} successful, {groups_failed} failed")
+    
     return signal_id
 
 
@@ -230,10 +289,85 @@ async def read_signal(cursor: AsyncCursor, uid: int) -> Signal | None:
     return Signal(**row)
 
 
-async def update_signal(cursor: AsyncCursor, signal: Signal) -> int | None:
+async def read_signal_with_user_groups(cursor: AsyncCursor, uid: int) -> SignalWithUserGroups | None:
+    """
+    Read a signal from the database with its associated user groups.
+
+    Parameters
+    ----------
+    cursor : AsyncCursor
+        An async database cursor.
+    uid : int
+        An ID of the signal to retrieve data for.
+
+    Returns
+    -------
+    SignalWithUserGroups | None
+        A signal with its user groups if it exists, otherwise None.
+    """
+    logger.info(f"Fetching signal {uid} with its user groups")
+    
+    try:
+        # First, get the signal
+        signal = await read_signal(cursor, uid)
+        if signal is None:
+            logger.warning(f"Signal with ID {uid} not found")
+            return None
+        
+        logger.info(f"Found signal with ID {uid}: '{signal.headline}'")
+        
+        # Convert to SignalWithUserGroups
+        signal_with_groups = SignalWithUserGroups(**signal.model_dump())
+        
+        # Get all groups that have this signal in their signal_ids
+        query = """
+            SELECT 
+                id, 
+                name,
+                signal_ids,
+                user_ids,
+                admin_ids,
+                collaborator_map
+            FROM 
+                user_groups
+            WHERE 
+                %s = ANY(signal_ids)
+            ORDER BY 
+                name;
+        """
+        
+        await cursor.execute(query, (uid,))
+        
+        # Add groups to the signal
+        from . import user_groups as ug_module
+        signal_with_groups.user_groups = []
+        group_count = 0
+        
+        async for row in cursor:
+            try:
+                # Convert row to dict
+                group_data = ug_module.handle_user_group_row(row)
+                # Create UserGroup from dict
+                group = UserGroup(**group_data)
+                signal_with_groups.user_groups.append(group)
+                group_count += 1
+                logger.debug(f"Added group {group.id} ({group.name}) to signal {uid}")
+            except Exception as e:
+                logger.error(f"Error processing group for signal {uid}: {e}")
+        
+        logger.info(f"Signal {uid} is associated with {group_count} user groups")
+        return signal_with_groups
+        
+    except Exception as e:
+        logger.error(f"Error retrieving signal {uid} with user groups: {e}")
+        raise
+
+
+async def update_signal(cursor: AsyncCursor, signal: Signal, user_group_ids: List[int] = None) -> int | None:
     """
     Update a signal in the database, update its connected trends and update an attachment
-    in the Azure Blob Storage if applicable.
+    in the Azure Blob Storage if applicable. Optionally update the user groups the signal
+    belongs to.
 
     Parameters
     ----------
@@ -242,56 +376,153 @@ async def update_signal(cursor: AsyncCursor, signal: Signal) -> int | None:
     signal : Signal
         A signal object to update. The following fields are supported:
         - secondary_location: list[str] | None
+    user_group_ids : List[int], optional
+        List of user group IDs to add the signal to.
 
     Returns
     -------
     int | None
         A signal ID if the update has been performed, otherwise None.
     """
-    query = """
-        UPDATE
-            signals
-        SET
-             status = COALESCE(%(status)s, status),
-             created_for = COALESCE(%(created_for)s, created_for),
-             modified_at = NOW(),
-             modified_by = %(modified_by)s,
-             headline = COALESCE(%(headline)s, headline),
-             description = COALESCE(%(description)s, description),
-             steep_primary = COALESCE(%(steep_primary)s, steep_primary),
-             steep_secondary = COALESCE(%(steep_secondary)s, steep_secondary),
-             signature_primary = COALESCE(%(signature_primary)s, signature_primary),
-             signature_secondary = COALESCE(%(signature_secondary)s, signature_secondary),
-             sdgs = COALESCE(%(sdgs)s, sdgs),
-             created_unit = COALESCE(%(created_unit)s, created_unit),
-             url = COALESCE(%(url)s, url),
-             relevance = COALESCE(%(relevance)s, relevance),
-             keywords = COALESCE(%(keywords)s, keywords),
-             location = COALESCE(%(location)s, location),
-             secondary_location = COALESCE(%(secondary_location)s, secondary_location),
-             score = COALESCE(%(score)s, score)
-        WHERE
-            id = %(id)s
-        RETURNING
-            id
-        ;
-    """
-    await cursor.execute(query, signal.model_dump())
-    row = await cursor.fetchone()
-    if row is None:
-        return None
-    signal_id = row["id"]
+    logger.info(f"Updating signal with ID: {signal.id}, modified by: {signal.modified_by}")
+    if user_group_ids is not None:
+        logger.info(f"Will update user groups for signal {signal.id}: {user_group_ids}")
 
-    # update connected trends if any are present
-    await cursor.execute("DELETE FROM connections WHERE signal_id = %s;", (signal_id,))
-    for trend_id in signal.connected_trends or []:
-        query = "INSERT INTO connections (signal_id, trend_id, created_by) VALUES (%s, %s, %s);"
-        await cursor.execute(query, (signal_id, trend_id, signal.created_by))
+    # Update signal in database
+    try:
+        query = """
+            UPDATE
+                signals
+            SET
+                 status = COALESCE(%(status)s, status),
+                 created_for = COALESCE(%(created_for)s, created_for),
+                 modified_at = NOW(),
+                 modified_by = %(modified_by)s,
+                 headline = COALESCE(%(headline)s, headline),
+                 description = COALESCE(%(description)s, description),
+                 steep_primary = COALESCE(%(steep_primary)s, steep_primary),
+                 steep_secondary = COALESCE(%(steep_secondary)s, steep_secondary),
+                 signature_primary = COALESCE(%(signature_primary)s, signature_primary),
+                 signature_secondary = COALESCE(%(signature_secondary)s, signature_secondary),
+                 sdgs = COALESCE(%(sdgs)s, sdgs),
+                 created_unit = COALESCE(%(created_unit)s, created_unit),
+                 url = COALESCE(%(url)s, url),
+                 relevance = COALESCE(%(relevance)s, relevance),
+                 keywords = COALESCE(%(keywords)s, keywords),
+                 location = COALESCE(%(location)s, location),
+                 secondary_location = COALESCE(%(secondary_location)s, secondary_location),
+                 score = COALESCE(%(score)s, score)
+            WHERE
+                id = %(id)s
+            RETURNING
+                id
+            ;
+        """
+        await cursor.execute(query, signal.model_dump())
+        row = await cursor.fetchone()
+        if row is None:
+            logger.warning(f"Signal with ID {signal.id} not found for update")
+            return None
+        signal_id = row["id"]
+        logger.info(f"Signal {signal_id} updated successfully in database")
+    except Exception as e:
+        logger.error(f"Failed to update signal {signal.id}: {e}")
+        raise
 
-    # upload an image if it is not a URL to an existing image
-    blob_url = await storage.update_image(signal_id, "signals", signal.attachment)
-    query = "UPDATE signals SET attachment = %s WHERE id = %s;"
-    await cursor.execute(query, (blob_url, signal_id))
+    # Update connected trends
+    try:
+        logger.info(f"Updating connected trends for signal {signal_id}")
+        await cursor.execute("DELETE FROM connections WHERE signal_id = %s;", (signal_id,))
+        logger.debug(f"Removed existing trend connections for signal {signal_id}")
+        
+        if signal.connected_trends:
+            trends_added = 0
+            for trend_id in signal.connected_trends:
+                try:
+                    query = "INSERT INTO connections (signal_id, trend_id, created_by) VALUES (%s, %s, %s);"
+                    await cursor.execute(query, (signal_id, trend_id, signal.created_by))
+                    trends_added += 1
+                except Exception as trend_e:
+                    logger.warning(f"Failed to connect trend {trend_id} to signal {signal_id}: {trend_e}")
+            
+            logger.info(f"Added {trends_added} trend connections to signal {signal_id}")
+    except Exception as e:
+        logger.error(f"Error updating trend connections for signal {signal_id}: {e}")
+        # Continue execution despite trend connection errors
+
+    # Update image attachment
+    try:
+        logger.info(f"Updating image attachment for signal {signal_id}")
+        blob_url = await storage.update_image(signal_id, "signals", signal.attachment)
+        if blob_url is not None:
+            query = "UPDATE signals SET attachment = %s WHERE id = %s;"
+            await cursor.execute(query, (blob_url, signal_id))
+            logger.info(f"Image attachment updated successfully for signal {signal_id}")
+        else:
+            logger.info(f"No image attachment update needed for signal {signal_id}")
+    except Exception as e:
+        logger.error(f"Failed to update image for signal {signal_id}: {e}")
+        # Continue execution despite attachment error
+    
+    # Update signal's user groups if specified
+    if user_group_ids is not None:
+        logger.info(f"Processing user group updates for signal {signal_id}")
+        try:
+            from . import user_groups
+            
+            # Get all groups that currently have this signal
+            query = """
+                SELECT id, name
+                FROM user_groups
+                WHERE %s = ANY(signal_ids);
+            """
+            await cursor.execute(query, (signal_id,))
+            current_groups = {}
+            async for row in cursor:
+                current_groups[row["id"]] = row["name"]
+            
+            logger.info(f"Signal {signal_id} is currently in groups: {list(current_groups.keys())}")
+            
+            # Remove signal from groups not in user_group_ids
+            groups_removed = 0
+            groups_to_remove_from = [g for g in current_groups.keys() if g not in user_group_ids]
+            for group_id in groups_to_remove_from:
+                try:
+                    logger.debug(f"Removing signal {signal_id} from group {group_id} ({current_groups[group_id]})")
+                    group = await user_groups.read_user_group(cursor, group_id)
+                    if group is not None and signal_id in group.signal_ids:
+                        signal_ids = group.signal_ids.copy()
+                        signal_ids.remove(signal_id)
+                        group.signal_ids = signal_ids
+                        await user_groups.update_user_group(cursor, group)
+                        groups_removed += 1
+                        logger.info(f"Signal {signal_id} removed from group {group_id} ({group.name})")
+                except Exception as e:
+                    logger.error(f"Failed to remove signal {signal_id} from group {group_id}: {e}")
+            
+            # Add signal to new groups
+            groups_added = 0
+            for group_id in user_group_ids:
+                if group_id not in current_groups:
+                    try:
+                        logger.debug(f"Adding signal {signal_id} to group {group_id}")
+                        group = await user_groups.read_user_group(cursor, group_id)
+                        if group is not None:
+                            signal_ids = group.signal_ids or []
+                            if signal_id not in signal_ids:
+                                signal_ids.append(signal_id)
+                                group.signal_ids = signal_ids
+                                await user_groups.update_user_group(cursor, group)
+                                groups_added += 1
+                                logger.info(f"Signal {signal_id} added to group {group_id} ({group.name})")
+                        else:
+                            logger.warning(f"Group with ID {group_id} not found, skipping")
+                    except Exception as e:
+                        logger.error(f"Failed to add signal {signal_id} to group {group_id}: {e}")
+            
+            logger.info(f"User group assignments updated for signal {signal_id}: {groups_added} added, {groups_removed} removed")
+        except Exception as e:
+            logger.error(f"Error processing user group updates for signal {signal_id}: {e}")
 
     return signal_id
 

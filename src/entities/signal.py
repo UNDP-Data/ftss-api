@@ -2,13 +2,17 @@
 Entity (model) definitions for signal objects.
 """
 
-from typing import List, Dict
+from typing import List, Dict, TYPE_CHECKING, Any, Optional
 from pydantic import ConfigDict, Field, field_validator, model_validator
 
 from . import utils
 from .base import BaseEntity
 
-__all__ = ["Signal"]
+# Import only for type checking to avoid circular imports
+if TYPE_CHECKING:
+    from .user_groups import UserGroup
+
+__all__ = ["Signal", "SignalWithUserGroups", "SignalCreate", "SignalUpdate"]
 
 
 class Signal(BaseEntity):
@@ -76,6 +80,113 @@ class Signal(BaseEntity):
                 "secondary_location": ["Africa", "Asia"],
                 "score": None,
                 "connected_trends": [101, 102],
+            }
+        }
+    )
+
+
+class SignalWithUserGroups(Signal):
+    """
+    Extended signal entity that includes the user groups it belongs to.
+    This model is used in API responses to provide a signal with its associated user groups.
+    """
+    
+    user_groups: List[Any] = Field(
+        default_factory=list,
+        description="List of user groups this signal belongs to."
+    )
+    
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "id": 1,
+                "created_unit": "HQ",
+                "url": "https://undp.medium.com/the-cost-of-corruption-a827306696fb",
+                "relevance": "Of the approximately US$13 trillion that governments spend on public spending, up to 25 percent is lost to corruption.",
+                "keywords": ["economy", "governance"],
+                "location": "Global",
+                "favorite": False,
+                "is_draft": True,
+                "group_ids": [1, 2],
+                "collaborators": [1, 2, 3],
+                "secondary_location": ["Africa", "Asia"],
+                "score": None,
+                "connected_trends": [101, 102],
+                "user_groups": [
+                    {
+                        "id": 1,
+                        "name": "Research Team",
+                        "signal_ids": [1, 2, 3],
+                        "user_ids": [101, 102],
+                        "admin_ids": [101],
+                        "collaborator_map": {"1": [101, 102]}
+                    },
+                    {
+                        "id": 2,
+                        "name": "Policy Team",
+                        "signal_ids": [1, 4, 5],
+                        "user_ids": [103, 104],
+                        "admin_ids": [103],
+                        "collaborator_map": {"1": [103]}
+                    }
+                ]
+            }
+        }
+    )
+
+
+class SignalCreate(Signal):
+    """
+    Model for signal creation request that includes user_group_ids.
+    This is used for the request body in the POST endpoint.
+    """
+    
+    user_group_ids: Optional[List[int]] = Field(
+        default=None,
+        description="IDs of user groups to add the signal to after creation"
+    )
+    
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "headline": "New Signal Example",
+                "description": "This is a new signal with user groups.",
+                "steep_primary": "T",
+                "steep_secondary": ["S", "P"],
+                "signature_primary": "Shift",
+                "signature_secondary": ["Risk"],
+                "keywords": ["example", "test"],
+                "location": "Global",
+                "user_group_ids": [1, 2]
+            }
+        }
+    )
+
+
+class SignalUpdate(Signal):
+    """
+    Model for signal update request that includes user_group_ids.
+    This is used for the request body in the PUT endpoint.
+    """
+    
+    user_group_ids: Optional[List[int]] = Field(
+        default=None,
+        description="IDs of user groups to replace the signal's current group associations"
+    )
+    
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "id": 1,
+                "headline": "Updated Signal Example",
+                "description": "This is an updated signal with new user groups.",
+                "steep_primary": "T",
+                "steep_secondary": ["S", "P"],
+                "signature_primary": "Shift",
+                "signature_secondary": ["Risk"],
+                "keywords": ["updated", "test"],
+                "location": "Global",
+                "user_group_ids": [2, 3]
             }
         }
     )

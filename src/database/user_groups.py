@@ -36,6 +36,7 @@ SQL_SELECT_USER_GROUP = """
         name,
         signal_ids,
         user_ids,
+        admin_ids,
         collaborator_map
     FROM 
         user_groups
@@ -94,13 +95,15 @@ def handle_user_group_row(row) -> dict:
         data['name'] = row["name"]
         data['signal_ids'] = row["signal_ids"] or []
         data['user_ids'] = row["user_ids"] or []
+        data['admin_ids'] = row["admin_ids"] or []
         collab_map = row["collaborator_map"]
     else:
         data['id'] = row[0]
         data['name'] = row[1]
         data['signal_ids'] = row[2] or []
         data['user_ids'] = row[3] or []
-        collab_map = row[4]
+        data['admin_ids'] = row[4] or []
+        collab_map = row[5]
     
     # Handle collaborator_map field
     data['collaborator_map'] = {}
@@ -157,26 +160,31 @@ async def create_user_group(cursor: AsyncCursor, group: UserGroup) -> int:
         The ID of the created user group.
     """
     # Convert model to dict and ensure collaborator_map is a JSON string
-    group_data = group.model_dump(exclude={"id"})
-    group_data["collaborator_map"] = json.dumps(group_data["collaborator_map"])
+    name = group.name
+    signal_ids = group.signal_ids
+    user_ids = group.user_ids
+    admin_ids = group.admin_ids
+    collaborator_map = json.dumps(group.collaborator_map)
     
     query = """
         INSERT INTO user_groups (
             name,
             signal_ids,
             user_ids,
+            admin_ids,
             collaborator_map
         )
         VALUES (
-            %(name)s,
-            %(signal_ids)s,
-            %(user_ids)s,
-            %(collaborator_map)s
+            %s,
+            %s,
+            %s,
+            %s,
+            %s
         )
         RETURNING id
         ;
     """
-    await cursor.execute(query, group_data)
+    await cursor.execute(query, (name, signal_ids, user_ids, admin_ids, collaborator_map))
     row = await cursor.fetchone()
     if row is None:
         raise ValueError("Failed to create user group")
@@ -250,6 +258,7 @@ async def update_user_group(cursor: AsyncCursor, group: UserGroup) -> int | None
             name = %(name)s,
             signal_ids = %(signal_ids)s,
             user_ids = %(user_ids)s,
+            admin_ids = %(admin_ids)s,
             collaborator_map = %(collaborator_map)s
         WHERE id = %(id)s
         RETURNING id
@@ -428,7 +437,7 @@ async def remove_user_from_group(cursor: AsyncCursor, group_id: int, user_id: in
 
 async def get_user_groups(cursor: AsyncCursor, user_id: int) -> list[UserGroup]:
     """
-    Get all groups that a user is a member of.
+    Get all groups that a user is a member of or an admin of.
 
     Parameters
     ----------
@@ -442,8 +451,8 @@ async def get_user_groups(cursor: AsyncCursor, user_id: int) -> list[UserGroup]:
     list[UserGroup]
         A list of user groups.
     """
-    query = f"{SQL_SELECT_USER_GROUP} WHERE %s = ANY(user_ids) ORDER BY name;"
-    await cursor.execute(query, (user_id,))
+    query = f"{SQL_SELECT_USER_GROUP} WHERE %s = ANY(user_ids) OR %s = ANY(admin_ids) ORDER BY name;"
+    await cursor.execute(query, (user_id, user_id))
     result = []
     
     async for row in cursor:
@@ -735,7 +744,8 @@ async def get_user_groups_with_signals_and_users(cursor: AsyncCursor, user_id: i
 
 async def get_user_groups_with_users_by_user_id(cursor: AsyncCursor, user_id: int) -> list[UserGroupWithUsers]:
     """
-    Get all groups that a user is a member of, along with detailed user information for each group member.
+    Get all groups that a user is a member of or an admin of, along with detailed user information 
+    for each group member.
     This is a more focused version that only fetches user data, not signals.
 
     Parameters
@@ -752,9 +762,9 @@ async def get_user_groups_with_users_by_user_id(cursor: AsyncCursor, user_id: in
     """
     logger.debug("Getting user groups with users for user_id: %s", user_id)
     
-    # First get the groups the user belongs to
-    query = f"{SQL_SELECT_USER_GROUP} WHERE %s = ANY(user_ids) ORDER BY name;"
-    await cursor.execute(query, (user_id,))
+    # Get groups where the user is a member or an admin
+    query = f"{SQL_SELECT_USER_GROUP} WHERE %s = ANY(user_ids) OR %s = ANY(admin_ids) ORDER BY name;"
+    await cursor.execute(query, (user_id, user_id))
     result = []
     
     async for row in cursor:

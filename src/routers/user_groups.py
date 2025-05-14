@@ -123,7 +123,7 @@ async def get_my_user_groups(
     cursor: AsyncCursor = Depends(db.yield_cursor),
 ):
     """
-    Get all user groups that the current user is a member of.
+    Get all user groups that the current user is a member of or an admin of.
     This endpoint is accessible to all authenticated users.
     """
     try:
@@ -131,9 +131,9 @@ async def get_my_user_groups(
             logger.warning("User ID not found in get_my_user_groups")
             raise exceptions.not_found
         
-        # Get groups this user is a member of
+        # Get groups where this user is a member or an admin
         user_groups = await db.get_user_groups_with_users_by_user_id(cursor, user.id)
-        logger.info(f"User {user.id} retrieved {len(user_groups)} groups")
+        logger.info(f"User {user.id} retrieved {len(user_groups)} groups (as member or admin)")
         return user_groups
     except Exception as e:
         if not isinstance(e, HTTPException):  # Don't log HTTPExceptions
@@ -162,7 +162,7 @@ async def get_my_user_groups_with_signals(
     include_users: bool = Query(True, description="If true, includes detailed user information for each group member (defaults to true)")
 ):
     """
-    Get all user groups that the current user is a member of along with their signals data.
+    Get all user groups that the current user is a member of or an admin of along with their signals data.
 
     This enhanced endpoint provides detailed information about each signal associated with the groups,
     including whether the current user has edit permissions for each signal. This is useful for:
@@ -215,13 +215,17 @@ async def create_user_group(
     group_data: UserGroupCreate,
     current_user: User = Depends(authenticate_user),  # Get the current user
     cursor: AsyncCursor = Depends(db.yield_cursor),
-    include_users: bool = Query(False, description="If true, includes detailed user information for each group member")
+    include_users: bool = Query(False, description="If true, includes detailed user information for each group member"),
+    admins: List[str] = Query(None, description="List of user emails to set as admins in the group")
 ):
     """
     Create a new user group.
 
     Optionally include detailed user information for each group member in the response
     by setting the `include_users` query parameter to true.
+    
+    The current authenticated user is automatically added as both a member and an admin of the group.
+    Additional admin users can be specified using the `admins` query parameter.
     """
     try:
         # Create the base group
@@ -229,8 +233,11 @@ async def create_user_group(
 
         # Initialize user_ids list with the current user's ID
         user_ids = []
+        admin_ids = []
+        
         if current_user.id:
             user_ids.append(current_user.id)
+            admin_ids.append(current_user.id)  # Make current user an admin
 
         # Handle email addresses if provided
         if group_data.users:
@@ -239,12 +246,25 @@ async def create_user_group(
                 if user and user.id and user.id not in user_ids:  # Avoid duplicates
                     user_ids.append(user.id)
 
+        # Handle admin emails if provided
+        if admins:
+            for email in admins:
+                user = await db.read_user_by_email(cursor, email)
+                if user and user.id:
+                    if user.id not in user_ids:  # If not already in user_ids, add them
+                        user_ids.append(user.id)
+                    if user.id not in admin_ids:  # Avoid duplicates in admin_ids
+                        admin_ids.append(user.id)
+
         if user_ids:
             group.user_ids = user_ids
+            
+        if admin_ids:
+            group.admin_ids = admin_ids
 
         # Create the group
         group_id = await db.create_user_group(cursor, group)
-        logger.info(f"Created user group {group_id} with name '{group.name}' and {len(user_ids)} users")
+        logger.info(f"Created user group {group_id} with name '{group.name}', {len(user_ids)} users, and {len(admin_ids)} admins")
 
         # Retrieve and return the created group
         created_group = await db.read_user_group(cursor, group_id, fetch_details=include_users)
@@ -265,6 +285,7 @@ async def create_user_group(
                 "group_data": {
                     "name": group_data.name,
                     "users_count": len(group_data.users) if group_data.users else 0,
+                    "admins_count": len(admins) if admins else 0,
                     "current_user_id": current_user.id if current_user else None
                 }
             }
