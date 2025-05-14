@@ -146,3 +146,5 @@ create_test_user.sql
 Taskfile.yml
 .env.local
 /.logs
+/logs
+webapp_logs.zip
