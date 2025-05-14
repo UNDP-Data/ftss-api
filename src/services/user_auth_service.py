@@ -1,53 +1,79 @@
 """
-Microsoft Graph implementation of the email service using Enterprise Application credentials.
+Microsoft Graph implementation using user authentication.
+This leverages the existing Azure CLI authentication.
 """
 
 import logging
 import os
 import json
+import asyncio
+import subprocess
 from typing import Any, Dict, List
 
-from azure.identity import ClientSecretCredential
 import httpx
 
 from .email_service import EmailServiceBase
 
 logger = logging.getLogger(__name__)
 
-# Define the Microsoft Graph scopes
-GRAPH_SCOPE = "https://graph.microsoft.com/.default"
-GRAPH_ENDPOINT = "https://graph.microsoft.com/v1.0"
-
-class MSGraphEmailService(EmailServiceBase):
-    """Service class for handling email operations using Microsoft Graph API"""
+class UserAuthEmailService(EmailServiceBase):
+    """Service class for handling email operations using Microsoft Graph API with user auth"""
     
     def __init__(self):
         try:
-            # Get credentials from environment variables
-            tenant_id = os.getenv('TENANT_ID')
-            client_id = os.getenv('CLIENT_ID')
-            client_secret = os.getenv('CLIENT_SECRET')
-            
-            if not all([tenant_id, client_id, client_secret]):
-                logger.error("Missing required environment variables for authentication")
-                raise ValueError("TENANT_ID, CLIENT_ID, and CLIENT_SECRET must be set")
-            
-            # Use ClientSecretCredential for app authentication
-            self.credential = ClientSecretCredential(
-                tenant_id=tenant_id,
-                client_id=client_id,
-                client_secret=client_secret
-            )
-            
             self.from_email = os.getenv('MS_FROM_EMAIL')
             if not self.from_email:
                 logger.error("MS_FROM_EMAIL environment variable is not set")
                 raise ValueError("Microsoft sender email is required")
+            
+            self.user_email = os.getenv('USER_EMAIL')
+            if not self.user_email:
+                logger.error("USER_EMAIL environment variable is not set")
+                raise ValueError("User email is required")
                 
-            logger.info("MSGraphEmailService initialized successfully with enterprise application credentials")
+            # Token cache
+            self.token = None
+            self.token_expires = 0
+                
+            logger.info("UserAuthEmailService initialized successfully")
             
         except Exception as e:
-            logger.error(f"Failed to initialize MSGraphEmailService: {str(e)}")
+            logger.error(f"Failed to initialize UserAuthEmailService: {str(e)}")
+            raise
+
+    async def _get_token(self) -> str:
+        """Get an access token using az cli"""
+        current_time = asyncio.get_event_loop().time()
+        
+        # If we have a valid token that won't expire in the next 5 minutes, use it
+        if self.token and current_time < (self.token_expires - 300):
+            return self.token
+            
+        try:
+            # Get token using az cli command
+            cmd = [
+                "az", "account", "get-access-token", 
+                "--resource", "https://graph.microsoft.com"
+            ]
+            
+            # Run the command
+            result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+            token_info = json.loads(result.stdout)
+            
+            # Extract token and expiration
+            self.token = token_info["accessToken"]
+            
+            # Calculate token expiration time (timestamp from Azure CLI is already in seconds)
+            self.token_expires = token_info["expiresOn"]
+            
+            logger.info(f"Successfully got access token using Azure CLI. Expires: {self.token_expires}")
+            return self.token
+            
+        except subprocess.CalledProcessError as e:
+            logger.error(f"Error executing Azure CLI command: {e.stderr}")
+            raise
+        except Exception as e:
+            logger.error(f"Error getting token: {str(e)}")
             raise
 
     async def send_email(
@@ -57,7 +83,7 @@ class MSGraphEmailService(EmailServiceBase):
         content: str,
         content_type: str = "text/plain"
     ) -> bool:
-        """Send an email using Microsoft Graph API with Mail.Send permission"""
+        """Send an email using Microsoft Graph API with user authentication"""
         try:
             logger.info(f"Preparing to send email to {len(to_emails)} recipients")
             
@@ -87,12 +113,20 @@ class MSGraphEmailService(EmailServiceBase):
             
             logger.debug(f"Email content prepared: subject='{subject}', type='{content_type}'")
             
-            # For enterprise applications with app permissions, we send on behalf of a user
-            # using /users/{user_id}/sendMail instead of /me/sendMail
-            user_email = self.from_email
+            # Get token
+            token = await self._get_token()
             
             # Send the email using Microsoft Graph API
-            response = await self._post(f"/users/{user_email}/sendMail", message)
+            headers = {
+                "Authorization": f"Bearer {token}",
+                "Content-Type": "application/json"
+            }
+            
+            # Use the /me/sendMail endpoint to send from the authenticated user
+            url = "https://graph.microsoft.com/v1.0/me/sendMail"
+            
+            async with httpx.AsyncClient() as client:
+                response = await client.post(url, json=message, headers=headers)
             
             if response.status_code in [200, 201, 202, 204]:
                 logger.info(f"Email sent successfully: status_code={response.status_code}")
@@ -129,70 +163,16 @@ class MSGraphEmailService(EmailServiceBase):
                 template_content = template_content.replace(f"{{{key}}}", str(value))
             
             # Send the email using the processed template
-            message = {
-                "message": {
-                    "subject": subject,
-                    "body": {
-                        "contentType": "HTML",
-                        "content": template_content
-                    },
-                    "toRecipients": [
-                        {
-                            "emailAddress": {
-                                "address": to_email
-                            }
-                        }
-                    ],
-                    "from": {
-                        "emailAddress": {
-                            "address": self.from_email
-                        }
-                    }
-                },
-                "saveToSentItems": "true"
-            }
-            
-            # For enterprise applications with app permissions, we send on behalf of a user
-            user_email = self.from_email
-            
-            # Send the email
-            response = await self._post(f"/users/{user_email}/sendMail", message)
-            
-            if response.status_code in [200, 201, 202, 204]:
-                logger.info(f"Notification email sent successfully: status_code={response.status_code}")
-                return True
-            else:
-                logger.error(f"Failed to send notification email: status_code={response.status_code}, response={response.text}")
-                return False
+            return await self.send_email(
+                to_emails=[to_email],
+                subject=subject,
+                content=template_content,
+                content_type="text/html"
+            )
             
         except Exception as e:
             logger.error(f"Error sending notification email: {str(e)}", exc_info=True)
             return False
-    
-    async def _post(self, endpoint: str, data: dict) -> httpx.Response:
-        """Helper method to make a POST request to the Graph API"""
-        try:
-            # Get token using client credentials
-            token = self.credential.get_token(GRAPH_SCOPE)
-            
-            # Prepare headers
-            headers = {
-                "Authorization": f"Bearer {token.token}",
-                "Content-Type": "application/json"
-            }
-            
-            # Build the URL
-            url = f"{GRAPH_ENDPOINT}{endpoint}"
-            
-            logger.debug(f"Sending request to URL: {url}")
-            
-            # Make the request
-            async with httpx.AsyncClient() as client:
-                return await client.post(url, headers=headers, json=data)
-                
-        except Exception as e:
-            logger.error(f"Error in _post method: {str(e)}", exc_info=True)
-            raise
             
     async def _get_template_content(self, template_id: str) -> str:
         """
