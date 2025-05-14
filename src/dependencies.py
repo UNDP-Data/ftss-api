@@ -2,6 +2,7 @@
 Functions used for dependency injection for role-based access control.
 """
 
+import logging
 from typing import Annotated
 
 from fastapi import Depends, Path
@@ -11,6 +12,8 @@ from . import database as db
 from . import exceptions
 from .authentication import authenticate_user
 from .entities import User
+
+logger = logging.getLogger(__name__)
 
 __all__ = [
     "require_admin",
@@ -22,8 +25,11 @@ __all__ = [
 
 async def require_admin(user: User = Depends(authenticate_user)) -> User:
     """Require that the user is assigned an admin role."""
+    logger.info(f"Checking admin permissions for user {user.email} with role {user.role}")
     if not user.is_admin:
+        logger.warning(f"Permission denied: User {user.email} with role {user.role} attempted admin action")
         raise exceptions.permission_denied
+    logger.info(f"Admin permission granted for user {user.email}")
     return user
 
 

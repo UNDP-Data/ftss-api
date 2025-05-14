@@ -140,3 +140,11 @@ cython_debug/
 # Manually added for this project
 .idea/
 **/.DS_Store
+create_test_user.sql
+.env.production
+/.prs
+Taskfile.yml
+.env.local
+/.logs
+/logs
+webapp_logs.zip

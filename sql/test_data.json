@@ -1,0 +1,104 @@
+{
+  "signals": [
+    {
+      "status": "Approved",
+      "created_by": "dev@undp.org",
+      "modified_by": "dev@undp.org",
+      "headline": "AI Revolution in Healthcare",
+      "description": "Artificial Intelligence is transforming healthcare delivery and patient outcomes globally.",
+      "url": "https://example.com/ai-healthcare",
+      "relevance": "AI adoption in healthcare is expected to grow by 40% annually through 2025",
+      "keywords": ["AI", "healthcare", "technology"],
+      "location": "Global",
+      "steep_primary": "Technological – Made culture, tools, devices, systems, infrastructure and networks",
+      "steep_secondary": [
+        "Social – Issues related to human culture, demography, communication, movement and migration, work and education",
+        "Economic – Issues of value, money, financial tools and systems, business and business models, exchanges and transactions"
+      ],
+      "signature_primary": "Strategic Innovation",
+      "signature_secondary": ["Digitalisation", "Development Financing"],
+      "sdgs": ["GOAL 3: Good Health and Well-being"],
+      "created_unit": "UNDP Innovation"
+    },
+    {
+      "status": "Approved",
+      "created_by": "dev@undp.org",
+      "modified_by": "dev@undp.org",
+      "headline": "Climate-Resilient Agriculture",
+      "description": "New farming techniques helping communities adapt to climate change.",
+      "url": "https://example.com/climate-agriculture",
+      "relevance": "Over 500 communities have adopted these techniques, increasing crop yields by 30%",
+      "keywords": ["agriculture", "climate", "resilience"],
+      "location": "Africa",
+      "steep_primary": "Environmental – The natural world, living environment, sustainability, resources, climate and health",
+      "steep_secondary": [
+        "Economic – Issues of value, money, financial tools and systems, business and business models, exchanges and transactions",
+        "Social – Issues related to human culture, demography, communication, movement and migration, work and education"
+      ],
+      "signature_primary": "Resilience",
+      "signature_secondary": ["Environment", "Poverty and Inequality"],
+      "sdgs": ["GOAL 2: Zero Hunger", "GOAL 13: Climate Action"],
+      "created_unit": "UNDP Climate"
+    },
+    {
+      "status": "Draft",
+      "created_by": "dev@undp.org",
+      "modified_by": "dev@undp.org",
+      "headline": "Digital Financial Inclusion",
+      "description": "Mobile banking revolutionizing access to financial services in developing nations.",
+      "url": "https://example.com/digital-finance",
+      "relevance": "Mobile money users increased by 12.7% globally, reaching 1.2 billion accounts",
+      "keywords": ["fintech", "inclusion", "mobile"],
+      "location": "Asia-Pacific",
+      "steep_primary": "Economic – Issues of value, money, financial tools and systems, business and business models, exchanges and transactions",
+      "steep_secondary": [
+        "Technological – Made culture, tools, devices, systems, infrastructure and networks",
+        "Social – Issues related to human culture, demography, communication, movement and migration, work and education"
+      ],
+      "signature_primary": "Development Financing",
+      "signature_secondary": ["Digitalisation", "Poverty and Inequality"],
+      "sdgs": ["GOAL 1: No Poverty", "GOAL 10: Reduced Inequality"],
+      "created_unit": "UNDP Finance"
+    },
+    {
+      "status": "Review",
+      "created_by": "dev@undp.org",
+      "modified_by": "dev@undp.org",
+      "headline": "Urban Mobility Revolution",
+      "description": "Smart city solutions transforming urban transportation systems.",
+      "url": "https://example.com/urban-mobility",
+      "relevance": "Electric vehicle adoption in cities grew by 50% year-over-year",
+      "keywords": ["mobility", "smart-city", "transportation"],
+      "location": "Latin America",
+      "steep_primary": "Technological – Made culture, tools, devices, systems, infrastructure and networks",
+      "steep_secondary": [
+        "Environmental – The natural world, living environment, sustainability, resources, climate and health",
+        "Social – Issues related to human culture, demography, communication, movement and migration, work and education"
+      ],
+      "signature_primary": "Strategic Innovation",
+      "signature_secondary": ["Environment", "Energy"],
+      "sdgs": ["GOAL 11: Sustainable Cities and Communities"],
+      "created_unit": "UNDP Cities"
+    },
+    {
+      "status": "Approved",
+      "created_by": "dev@undp.org",
+      "modified_by": "dev@undp.org",
+      "headline": "Renewable Energy Breakthrough",
+      "description": "Novel solar technology achieves record efficiency levels.",
+      "url": "https://example.com/solar-breakthrough",
+      "relevance": "New solar cells achieve 40% efficiency, marking a significant milestone",
+      "keywords": ["renewable", "solar", "energy"],
+      "location": "Global",
+      "steep_primary": "Technological – Made culture, tools, devices, systems, infrastructure and networks",
+      "steep_secondary": [
+        "Environmental – The natural world, living environment, sustainability, resources, climate and health",
+        "Economic – Issues of value, money, financial tools and systems, business and business models, exchanges and transactions"
+      ],
+      "signature_primary": "Energy",
+      "signature_secondary": ["Environment", "Strategic Innovation"],
+      "sdgs": ["GOAL 7: Affordable and Clean Energy"],
+      "created_unit": "UNDP Energy"
+    }
+  ]
+}

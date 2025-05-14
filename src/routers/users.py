@@ -2,6 +2,7 @@
 A router for creating, reading and updating trends.
 """
 
+import logging
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Path, Query
@@ -29,6 +30,7 @@ async def search_users(
 @router.get("/me", response_model=User)
 async def read_current_user(user: User = Depends(authenticate_user)):
     """Read the current user information from a JTW token."""
+    logging.debug(f"User: {user}")
     if user is None:
         raise exceptions.not_found
     return user
