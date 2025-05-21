@@ -142,10 +142,10 @@ async def authenticate_user(
                 token = test_token
                 
         # Default user data for local development
-        local_email = "test.user@undp.org"
-        name = "Test User"
-        unit = "Data Futures Exchange (DFx)"
-        acclab = False
+        local_email = os.environ.get("TEST_USER_EMAIL", "test.user@undp.org")
+        name = os.environ.get("TEST_USER_NAME", "Test User")
+        unit = os.environ.get("TEST_USER_UNIT", "Data Futures Exchange (DFx)")
+        acclab = os.environ.get("TEST_USER_ACCLAB", False)
         
         # Check for specific test tokens
         if token == "test-admin-token":

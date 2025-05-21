@@ -148,3 +148,4 @@ Taskfile.yml
 /.logs
 /logs
 webapp_logs.zip
+/.schemas

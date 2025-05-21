@@ -5,7 +5,7 @@ CRUD operations for user group entities.
 from psycopg import AsyncCursor
 import json
 import logging
-from typing import List
+from typing import List, Union
 
 from ..entities import UserGroup, Signal, User, UserGroupWithSignals, UserGroupWithUsers, UserGroupComplete
 
@@ -25,6 +25,7 @@ __all__ = [
     "list_user_groups_with_users",
     "get_user_groups_with_signals_and_users",
     "get_user_groups_with_users_by_user_id",
+    "debug_user_groups",
 ]
 
 logger = logging.getLogger(__name__)
@@ -37,7 +38,8 @@ SQL_SELECT_USER_GROUP = """
         signal_ids,
         user_ids,
         admin_ids,
-        collaborator_map
+        collaborator_map,
+        created_at
     FROM 
         user_groups
 """
@@ -97,6 +99,7 @@ def handle_user_group_row(row) -> dict:
         data['user_ids'] = row["user_ids"] or []
         data['admin_ids'] = row["admin_ids"] or []
         collab_map = row["collaborator_map"]
+        data['created_at'] = row.get("created_at")
     else:
         data['id'] = row[0]
         data['name'] = row[1]
@@ -104,6 +107,8 @@ def handle_user_group_row(row) -> dict:
         data['user_ids'] = row[3] or []
         data['admin_ids'] = row[4] or []
         collab_map = row[5]
+        # Created at would be at index 6 if present
+        data['created_at'] = row[6] if len(row) > 6 else None
     
     # Handle collaborator_map field
     data['collaborator_map'] = {}
@@ -311,7 +316,7 @@ async def list_user_groups(cursor: AsyncCursor) -> list[UserGroup]:
     list[UserGroup]
         A list of all user groups.
     """
-    query = f"{SQL_SELECT_USER_GROUP} ORDER BY name;"
+    query = f"{SQL_SELECT_USER_GROUP} ORDER BY created_at DESC;"
     await cursor.execute(query)
     result = []
     
@@ -451,14 +456,76 @@ async def get_user_groups(cursor: AsyncCursor, user_id: int) -> list[UserGroup]:
     list[UserGroup]
         A list of user groups.
     """
-    query = f"{SQL_SELECT_USER_GROUP} WHERE %s = ANY(user_ids) OR %s = ANY(admin_ids) ORDER BY name;"
+    logger.debug("Getting user groups for user_id: %s", user_id)
+    
+    # Run a direct SQL query to ensure array type handling is consistent
+    logger.debug("Fetching all groups where user %s is a member or admin...", user_id)
+    query = """
+    SELECT 
+        id, 
+        name,
+        signal_ids,
+        user_ids,
+        admin_ids,
+        collaborator_map,
+        created_at
+    FROM 
+        user_groups
+    WHERE 
+        %s = ANY(user_ids) OR %s = ANY(admin_ids)
+    ORDER BY 
+        created_at DESC;
+    """
+    
     await cursor.execute(query, (user_id, user_id))
+    
+    # Process results
+    group_ids_seen = set()
     result = []
+    member_groups = []
+    admin_groups = []
+    
+    # Debug
+    row_count = 0
     
     async for row in cursor:
+        row_count += 1
         data = handle_user_group_row(row)
-        result.append(UserGroup(**data))
+        group_id = data['id']
+        
+        # Debug
+        logger.debug("Processing group ID: %s, Name: %s", group_id, data['name'])
+        logger.debug("Group user_ids: %s", data['user_ids'])
+        logger.debug("Group admin_ids: %s", data['admin_ids'])
+        
+        # Track membership rigorously by explicitly converting IDs to integers
+        is_member = False
+        if data['user_ids']:
+            is_member = user_id in [int(uid) for uid in data['user_ids']]
+            
+        is_admin = False
+        if data['admin_ids']:
+            is_admin = user_id in [int(aid) for aid in data['admin_ids']]
+        
+        if is_member:
+            member_groups.append(group_id)
+            logger.debug("User %s is a member of group %s", user_id, group_id)
+        if is_admin:
+            admin_groups.append(group_id)
+            logger.debug("User %s is an admin of group %s", user_id, group_id)
+            
+        # Only add each group once
+        if group_id not in group_ids_seen:
+            group_ids_seen.add(group_id)
+            result.append(UserGroup(**data))
     
+    logger.debug("Raw query returned %s rows", row_count)
+    logger.debug("Found %s groups where user %s is a member: %s", 
+                len(member_groups), user_id, member_groups)
+    logger.debug("Found %s groups where user %s is an admin: %s", 
+                len(admin_groups), user_id, admin_groups)
+    logger.debug("Total: Found %s user groups for user_id: %s, Group IDs: %s", 
+                len(result), user_id, list(group_ids_seen))
     return result
 
 
@@ -490,7 +557,7 @@ async def get_group_users(cursor: AsyncCursor, group_id: int) -> list[int]:
     return row[0] if row and row[0] else []
 
 
-async def get_user_groups_with_signals(cursor: AsyncCursor, user_id: int, fetch_users: bool = False) -> list[UserGroupWithSignals]:
+async def get_user_groups_with_signals(cursor: AsyncCursor, user_id: int, fetch_users: bool = False) -> List[Union[UserGroupWithSignals, UserGroupComplete]]:
     """
     Get all groups that a user is a member of, along with the associated signals data.
 
@@ -506,7 +573,7 @@ async def get_user_groups_with_signals(cursor: AsyncCursor, user_id: int, fetch_
 
     Returns
     -------
-    list[UserGroupWithSignals]
+    list[Union[UserGroupWithSignals, UserGroupComplete]]
         A list of user groups with associated signals and optional user details.
     """
     logger.debug("Getting user groups with signals for user_id: %s", user_id)
@@ -545,26 +612,28 @@ async def get_user_groups_with_signals(cursor: AsyncCursor, user_id: int, fetch_
                     signals.append(Signal(**signal_dict))
 
         # Fetch full user details if requested
-        users = []
+        users_list: List[User] = []
         if fetch_users and group.user_ids:
-            users = await get_users_for_group(cursor, group.user_ids)
+            # Ensure user_ids are integers for get_users_for_group
+            typed_user_ids = [int(uid) for uid in group.user_ids if isinstance(uid, (int, str)) and str(uid).isdigit()]
+            users_list = await get_users_for_group(cursor, typed_user_ids)
 
         # Create a UserGroupWithSignals instance
         if fetch_users:
             # If we fetched user details, create a UserGroupComplete
-            group_with_signals = UserGroupComplete(
+            group_with_data: Union[UserGroupWithSignals, UserGroupComplete] = UserGroupComplete(
                 **group_data,
                 signals=signals,
-                users=users
+                users=users_list
             )
         else:
             # Otherwise create a UserGroupWithSignals
-            group_with_signals = UserGroupWithSignals(
+            group_with_data = UserGroupWithSignals(
                 **group_data,
                 signals=signals
             )
 
-        result.append(group_with_signals)
+        result.append(group_with_data)
 
     logger.debug("Found %s user groups with signals for user_id: %s", len(result), user_id)
     return result
@@ -640,7 +709,10 @@ async def get_user_group_with_users(cursor: AsyncCursor, group_id: int) -> UserG
     
     # Convert to dict for modification
     group_data = group.model_dump()
-    users = await get_users_for_group(cursor, group.user_ids)
+    typed_user_ids = []
+    if group.user_ids:
+        typed_user_ids = [int(uid) for uid in group.user_ids if isinstance(uid, (int, str)) and str(uid).isdigit()]
+    users = await get_users_for_group(cursor, typed_user_ids)
     
     # Create a UserGroupWithUsers instance
     return UserGroupWithUsers(**group_data, users=users)
@@ -669,7 +741,10 @@ async def list_user_groups_with_users(cursor: AsyncCursor) -> list[UserGroupWith
     # For each group, get user details
     for group in groups:
         group_data = group.model_dump()
-        users = await get_users_for_group(cursor, group.user_ids)
+        typed_user_ids = []
+        if group.user_ids:
+            typed_user_ids = [int(uid) for uid in group.user_ids if isinstance(uid, (int, str)) and str(uid).isdigit()]
+        users = await get_users_for_group(cursor, typed_user_ids)
         
         # Create a UserGroupWithUsers instance
         group_with_users = UserGroupWithUsers(**group_data, users=users)
@@ -732,7 +807,10 @@ async def get_user_groups_with_signals_and_users(cursor: AsyncCursor, user_id: i
             logger.debug("Found %s signals for group_id: %s", signal_count, group.id)
         
         # Get users for this group
-        users = await get_users_for_group(cursor, group.user_ids)
+        typed_user_ids = []
+        if group.user_ids:
+            typed_user_ids = [int(uid) for uid in group.user_ids if isinstance(uid, (int, str)) and str(uid).isdigit()]
+        users = await get_users_for_group(cursor, typed_user_ids)
         
         # Create a UserGroupComplete instance
         group_complete = UserGroupComplete(**group_data, signals=signals, users=users)
@@ -762,18 +840,170 @@ async def get_user_groups_with_users_by_user_id(cursor: AsyncCursor, user_id: in
     """
     logger.debug("Getting user groups with users for user_id: %s", user_id)
     
-    # Get groups where the user is a member or an admin
-    query = f"{SQL_SELECT_USER_GROUP} WHERE %s = ANY(user_ids) OR %s = ANY(admin_ids) ORDER BY name;"
+    # Run a direct raw SQL query to improve reliability when dealing with array types
+    # This directly checks for user_id in the arrays without relying on array operators
+    logger.debug("Fetching all groups where user %s is a member or admin...", user_id)
+    
+    query = """
+    SELECT 
+        id, 
+        name,
+        signal_ids,
+        user_ids,
+        admin_ids,
+        collaborator_map,
+        created_at
+    FROM 
+        user_groups
+    WHERE 
+        %s = ANY(user_ids) OR %s = ANY(admin_ids)
+    ORDER BY 
+        created_at DESC;
+    """
+    
     await cursor.execute(query, (user_id, user_id))
+    
+    # Process results
+    group_ids_seen = set()
     result = []
+    member_groups = []
+    admin_groups = []
+    
+    # Debug
+    row_count = 0
     
     async for row in cursor:
+        row_count += 1
         group_data = handle_user_group_row(row)
-        users = await get_users_for_group(cursor, group_data['user_ids'])
+        group_id = group_data['id']
         
-        # Create a UserGroupWithUsers instance
-        group_with_users = UserGroupWithUsers(**group_data, users=users)
-        result.append(group_with_users)
+        # Debug
+        logger.debug("Processing group ID: %s, Name: %s", group_id, group_data['name'])
+        logger.debug("Group user_ids: %s", group_data['user_ids'])
+        logger.debug("Group admin_ids: %s", group_data['admin_ids'])
+        
+        # Track membership rigorously
+        is_member = False
+        if group_data['user_ids']:
+            is_member = user_id in [int(uid) for uid in group_data['user_ids']]
+            
+        is_admin = False
+        if group_data['admin_ids']:
+            is_admin = user_id in [int(aid) for aid in group_data['admin_ids']]
+        
+        if is_member:
+            member_groups.append(group_id)
+            logger.debug("User %s is a member of group %s", user_id, group_id)
+        if is_admin:
+            admin_groups.append(group_id)
+            logger.debug("User %s is an admin of group %s", user_id, group_id)
+            
+        # Only add each group once
+        if group_id not in group_ids_seen:
+            group_ids_seen.add(group_id)
+            users = await get_users_for_group(cursor, group_data['user_ids'])
+            
+            # Create a UserGroupWithUsers instance
+            group_with_users = UserGroupWithUsers(**group_data, users=users)
+            result.append(group_with_users)
     
-    logger.debug("Found %s user groups with users for user_id: %s", len(result), user_id)
+    logger.debug("Raw query returned %s rows", row_count)
+    logger.debug("Found %s groups where user %s is a member: %s", 
+                len(member_groups), user_id, member_groups)
+    logger.debug("Found %s groups where user %s is an admin: %s", 
+                len(admin_groups), user_id, admin_groups)
+    logger.debug("Total: Found %s user groups with users for user_id: %s, Group IDs: %s", 
+                len(result), user_id, list(group_ids_seen))
+    return result
+
+async def debug_user_groups(cursor: AsyncCursor, user_id: int) -> dict:
+    """
+    Debug function to directly query all user group information for a specific user.
+    This bypasses all processing logic to get raw data from the database.
+    
+    Parameters
+    ----------
+    cursor : AsyncCursor
+        An async database cursor.
+    user_id : int
+        The ID of the user.
+        
+    Returns
+    -------
+    dict
+        A dictionary of raw debug information about the user's groups.
+    """
+    logger.debug("=== DEBUGGING USER GROUPS for user_id: %s ===", user_id)
+    
+    # Direct query with no array handling
+    query1 = """
+    SELECT id, name, user_ids, admin_ids
+    FROM user_groups
+    WHERE %s = ANY(user_ids) OR %s = ANY(admin_ids)
+    ORDER BY id;
+    """
+    
+    await cursor.execute(query1, (user_id, user_id))
+    rows1 = []
+    async for row in cursor:
+        rows1.append(dict(row))
+    
+    # Member-only query
+    query2 = """
+    SELECT id, name, user_ids
+    FROM user_groups
+    WHERE %s = ANY(user_ids)
+    ORDER BY id;
+    """
+    
+    await cursor.execute(query2, (user_id,))
+    rows2 = []
+    async for row in cursor:
+        rows2.append(dict(row))
+    
+    # Admin-only query
+    query3 = """
+    SELECT id, name, admin_ids
+    FROM user_groups
+    WHERE %s = ANY(admin_ids)
+    ORDER BY id;
+    """
+    
+    await cursor.execute(query3, (user_id,))
+    rows3 = []
+    async for row in cursor:
+        rows3.append(dict(row))
+    
+    # Check if PostgreSQL sees the value in the arrays using array_position
+    query4 = """
+    SELECT 
+        id, 
+        name, 
+        array_position(user_ids, %s) as user_position,
+        array_position(admin_ids, %s) as admin_position
+    FROM 
+        user_groups
+    WHERE 
+        id IN (22, 25, 28);
+    """
+    
+    await cursor.execute(query4, (user_id, user_id))
+    rows4 = []
+    async for row in cursor:
+        rows4.append(dict(row))
+    
+    result = {
+        "combined_query": rows1,
+        "member_query": rows2,
+        "admin_query": rows3,
+        "array_position_check": rows4
+    }
+    
+    logger.debug("=== DEBUG RESULTS ===")
+    logger.debug("Combined query found %s groups: %s", len(rows1), [r['id'] for r in rows1])
+    logger.debug("Member query found %s groups: %s", len(rows2), [r['id'] for r in rows2])
+    logger.debug("Admin query found %s groups: %s", len(rows3), [r['id'] for r in rows3])
+    logger.debug("Array position check results: %s", rows4)
+    logger.debug("=== END DEBUG ===")
+    
     return result

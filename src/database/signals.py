@@ -92,6 +92,12 @@ async def search_signals(cursor: AsyncCursor, filters: SignalFilters) -> SignalP
              AND (%(score)s IS NULL OR score = %(score)s)
              AND (%(unit)s IS NULL OR unit_region = %(unit)s OR unit_name = %(unit)s)
              AND (%(query)s IS NULL OR text_search_field @@ websearch_to_tsquery('english', %(query)s))
+             AND (%(user_email)s IS NOT NULL AND (
+                  private = FALSE OR 
+                  created_by = %(user_email)s OR
+                  %(is_admin)s = TRUE OR
+                  %(is_staff)s = TRUE
+             ))
         ORDER BY
             {filters.order_by} {filters.direction}
         OFFSET
@@ -128,6 +134,7 @@ async def create_signal(cursor: AsyncCursor, signal: Signal, user_group_ids: Lis
         An ID of the signal in the database.
     """
     logger.info(f"Creating new signal with headline: '{signal.headline}', created by: {signal.created_by}")
+    logger.info(f"All Signal fields: {signal.model_dump()}")
     if user_group_ids:
         logger.info(f"Will add signal to user groups: {user_group_ids}")
     
@@ -152,7 +159,8 @@ async def create_signal(cursor: AsyncCursor, signal: Signal, user_group_ids: Lis
                 keywords,
                 location,
                 secondary_location,
-                score
+                score,
+                private
             )
             VALUES (
                 %(status)s,
@@ -172,7 +180,8 @@ async def create_signal(cursor: AsyncCursor, signal: Signal, user_group_ids: Lis
                 %(keywords)s,
                 %(location)s,
                 %(secondary_location)s,
-                %(score)s
+                %(score)s,
+                %(private)s
             )
             RETURNING
                 id
@@ -411,7 +420,8 @@ async def update_signal(cursor: AsyncCursor, signal: Signal, user_group_ids: Lis
                  keywords = COALESCE(%(keywords)s, keywords),
                  location = COALESCE(%(location)s, location),
                  secondary_location = COALESCE(%(secondary_location)s, secondary_location),
-                 score = COALESCE(%(score)s, score)
+                 score = COALESCE(%(score)s, score),
+                 private = COALESCE(%(private)s, private)
             WHERE
                 id = %(id)s
             RETURNING
@@ -559,6 +569,8 @@ async def read_user_signals(
     cursor: AsyncCursor,
     user_email: str,
     status: Status,
+    is_admin: bool = False,
+    is_staff: bool = False,
 ) -> list[Signal]:
     """
     Read signals from the database using a user email and status filter.
@@ -571,6 +583,10 @@ async def read_user_signals(
         An email of the user whose signals to read.
     status : Status
         A status of signals to filter by.
+    is_admin : bool, optional
+        Whether the user is an admin, by default False
+    is_staff : bool, optional
+        Whether the user is staff, by default False
 
     Returns
     -------
@@ -596,6 +612,9 @@ async def read_user_signals(
             created_by = %s AND status = %s
         ;
         """
+    # Since this function is explicitly for reading a user's OWN signals,
+    # we don't need additional private/public filtering here.
+    # The user is the creator, so they should see all their signals regardless of privacy setting.
     await cursor.execute(query, (user_email, status))
     rows = await cursor.fetchall()
     return [Signal(**row) for row in rows]

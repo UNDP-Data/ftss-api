@@ -30,19 +30,32 @@ async def search_signals(
     cursor: AsyncCursor = Depends(db.yield_cursor),
 ):
     """Search signals in the database using pagination and filters."""
+    # Add user info to filters for private signal handling
+    filters.user_email = user.email
+    filters.user_id = user.id
+    filters.is_admin = user.is_admin
+    filters.is_staff = user.is_staff
+    
     page = await db.search_signals(cursor, filters)
     return page.sanitise(user)
 
 
-@router.get("/export", response_model=None, dependencies=[Depends(require_curator)])
+@router.get("/export", response_model=None)
 async def export_signals(
     filters: Annotated[SignalFilters, Query()],
+    user: User = Depends(require_curator),
     cursor: AsyncCursor = Depends(db.yield_cursor),
 ):
     """
     Export signals that match the filters from the database. You can export up to
     10k rows at once.
     """
+    # Add user info to filters for private signal handling
+    filters.user_email = user.email
+    filters.user_id = user.id
+    filters.is_admin = user.is_admin
+    filters.is_staff = user.is_staff
+    
     page = await db.search_signals(cursor, filters)
 
     # prettify the data
@@ -99,8 +112,14 @@ async def create_signal(
     logger.info(f"Creating new signal requested by user: {user.email}")
     
     # Extract standard Signal fields and user_group_ids
-    signal = Signal(**signal_data.model_dump(exclude={"user_group_ids"}))
-    user_group_ids = signal_data.user_group_ids
+    signal_dict = signal_data.model_dump(exclude={"user_group_ids"})
+    
+    # Ensure status is "New" if None was provided
+    if signal_dict.get("status") is None:
+        signal_dict["status"] = Status.NEW
+        
+    signal = Signal(**signal_dict)
+    user_group_ids = signal_data.user_group_ids or []
     
     if user_group_ids:
         logger.info(f"With user_group_ids: {user_group_ids}")
@@ -144,7 +163,7 @@ async def read_my_signals(
     """
     Retrieve signal with a given status submitted by the current user.
     """
-    return await db.read_user_signals(cursor, user.email, status)
+    return await db.read_user_signals(cursor, user.email, status, user.is_admin, user.is_staff)
 
 
 @router.get("/{uid}", response_model=Signal)
@@ -165,6 +184,28 @@ async def read_signal(
         
     logger.info("Retrieved signal: %s", signal.model_dump())
     
+    # Check for permission to view private signals
+    if signal.private and not (user.is_admin or user.is_staff or signal.created_by == user.email):
+        # Check if user is a collaborator
+        is_collaborator = False
+        
+        # Check direct collaborator
+        collaborators = await db.get_signal_collaborators(cursor, uid)
+        if user.email in collaborators:
+            is_collaborator = True
+            
+        # Check group collaborator
+        if not is_collaborator and await db.can_user_edit_signal(cursor, uid, user.id):
+            is_collaborator = True
+            
+        if not is_collaborator:
+            logger.warning(
+                "Permission denied - user %s trying to access private signal %s",
+                user.email, uid
+            )
+            raise exceptions.permission_denied
+    
+    # Check for visitor permission with status
     if user.role == Role.VISITOR and signal.status != Status.APPROVED:
         logger.warning(
             "Permission denied - visitor trying to access non-approved signal. Status: %s",
@@ -203,7 +244,28 @@ async def read_signal_with_user_groups(
             logger.warning("Signal not found with ID: %s", uid)
             raise exceptions.not_found
         
-        # Check permissions
+        # Check for permission to view private signals
+        if signal.private and not (user.is_admin or user.is_staff or signal.created_by == user.email):
+            # Check if user is a collaborator
+            is_collaborator = False
+            
+            # Check direct collaborator
+            collaborators = await db.get_signal_collaborators(cursor, uid)
+            if user.email in collaborators:
+                is_collaborator = True
+                
+            # Check group collaborator
+            if not is_collaborator and await db.can_user_edit_signal(cursor, uid, user.id):
+                is_collaborator = True
+                
+            if not is_collaborator:
+                logger.warning(
+                    "Permission denied - user %s trying to access private signal %s",
+                    user.email, uid
+                )
+                raise exceptions.permission_denied
+        
+        # Check visitor permissions
         if user.role == Role.VISITOR and signal.status != Status.APPROVED:
             logger.warning(
                 "Permission denied - visitor trying to access non-approved signal. Status: %s",
@@ -254,7 +316,7 @@ async def update_signal(
     
     # Extract signal data and user_group_ids from the request body
     signal = Signal(**signal_data.model_dump(exclude={"user_group_ids"}))
-    user_group_ids = signal_data.user_group_ids
+    user_group_ids = signal_data.user_group_ids or []
     
     if user_group_ids is not None:
         logger.info(f"With user_group_ids: {user_group_ids}")
@@ -366,7 +428,7 @@ async def add_signal_collaborator(
         )
     
     # Add collaborator
-    if not await db.add_collaborator(cursor, uid, user_id):
+    if not await db.add_collaborator(cursor, uid, str(user_id)):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Invalid collaborator or signal",
@@ -400,7 +462,7 @@ async def remove_signal_collaborator(
         )
     
     # Remove collaborator
-    if not await db.remove_collaborator(cursor, uid, user_id):
+    if not await db.remove_collaborator(cursor, uid, str(user_id)):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Collaborator not found or signal does not exist",

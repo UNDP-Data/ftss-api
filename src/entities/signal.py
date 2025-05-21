@@ -43,8 +43,12 @@ class Signal(BaseEntity):
         description="Whether the current user has favorited this signal.",
     )
     is_draft: bool = Field(
-        default=True,
+        default=False,
         description="Whether the signal is in draft state or published.",
+    )
+    private: bool = Field(
+        default=False,
+        description="Whether the signal is private. Private signals are only visible to their creator, collaborators, and admins.",
     )
     group_ids: List[int] | None = Field(
         default=None,
@@ -53,6 +57,10 @@ class Signal(BaseEntity):
     collaborators: List[int] | None = Field(
         default=None,
         description="List of user IDs who can collaborate on this signal.",
+    )
+    can_edit: bool = Field(
+        default=False,
+        description="Whether the current user can edit this signal (set dynamically based on group membership and collaboration).",
     )
 
     @model_validator(mode='before')
@@ -75,6 +83,7 @@ class Signal(BaseEntity):
                 "location": "Global",
                 "favorite": False,
                 "is_draft": True,
+                "private": False,
                 "group_ids": [1, 2],
                 "collaborators": [1, 2, 3],
                 "secondary_location": ["Africa", "Asia"],
@@ -107,6 +116,7 @@ class SignalWithUserGroups(Signal):
                 "location": "Global",
                 "favorite": False,
                 "is_draft": True,
+                "private": False,
                 "group_ids": [1, 2],
                 "collaborators": [1, 2, 3],
                 "secondary_location": ["Africa", "Asia"],
@@ -141,6 +151,10 @@ class SignalCreate(Signal):
     This is used for the request body in the POST endpoint.
     """
     
+    status: Optional[utils.Status] = Field(
+        default=utils.Status.NEW,
+        description="Current signal review status. Defaults to NEW if not provided.",
+    )
     user_group_ids: Optional[List[int]] = Field(
         default=None,
         description="IDs of user groups to add the signal to after creation"
@@ -157,6 +171,7 @@ class SignalCreate(Signal):
                 "signature_secondary": ["Risk"],
                 "keywords": ["example", "test"],
                 "location": "Global",
+                "private": False,
                 "user_group_ids": [1, 2]
             }
         }
@@ -186,6 +201,7 @@ class SignalUpdate(Signal):
                 "signature_secondary": ["Risk"],
                 "keywords": ["updated", "test"],
                 "location": "Global",
+                "private": True,
                 "user_group_ids": [2, 3]
             }
         }
