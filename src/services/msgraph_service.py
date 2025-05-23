@@ -27,7 +27,9 @@ class MSGraphEmailService(EmailServiceBase):
             tenant_id = os.getenv('TENANT_ID')
             client_id = os.getenv('CLIENT_ID')
             client_secret = os.getenv('CLIENT_SECRET')
-            
+            service_type = os.getenv('EMAIL_SERVICE_TYPE')
+            self.from_email = os.getenv('MS_FROM_EMAIL')
+            logger.info(f"MSGraphEmailService config: TENANT_ID={tenant_id}, CLIENT_ID={client_id}, FROM_EMAIL={self.from_email}, EMAIL_SERVICE_TYPE={service_type}")
             if not all([tenant_id, client_id, client_secret]):
                 logger.error("Missing required environment variables for authentication")
                 raise ValueError("TENANT_ID, CLIENT_ID, and CLIENT_SECRET must be set")
@@ -39,7 +41,6 @@ class MSGraphEmailService(EmailServiceBase):
                 client_secret=client_secret
             )
             
-            self.from_email = os.getenv('MS_FROM_EMAIL')
             if not self.from_email:
                 logger.error("MS_FROM_EMAIL environment variable is not set")
                 raise ValueError("Microsoft sender email is required")
@@ -59,6 +60,7 @@ class MSGraphEmailService(EmailServiceBase):
     ) -> bool:
         """Send an email using Microsoft Graph API with Mail.Send permission"""
         try:
+            logger.info(f"send_email config: TENANT_ID={os.getenv('TENANT_ID')}, CLIENT_ID={os.getenv('CLIENT_ID')}, FROM_EMAIL={self.from_email}, EMAIL_SERVICE_TYPE={os.getenv('EMAIL_SERVICE_TYPE')}, to_emails={to_emails}, subject={subject}")
             logger.info(f"Preparing to send email to {len(to_emails)} recipients")
             
             # Prepare the email message
@@ -91,8 +93,20 @@ class MSGraphEmailService(EmailServiceBase):
             # using /users/{user_id}/sendMail instead of /me/sendMail
             user_email = self.from_email
             
-            # Send the email using Microsoft Graph API
-            response = await self._post(f"/users/{user_email}/sendMail", message)
+            logger.info("Acquiring Microsoft Graph token...")
+            try:
+                token = self.credential.get_token(GRAPH_SCOPE)
+                logger.info("Token acquired successfully.")
+            except Exception as token_exc:
+                logger.error(f"Failed to acquire token: {token_exc}", exc_info=True)
+                return False
+            
+            logger.info(f"Sending email via Graph API to /users/{user_email}/sendMail ...")
+            try:
+                response = await self._post(f"/users/{user_email}/sendMail", message, token=token)
+            except Exception as post_exc:
+                logger.error(f"Exception during HTTP POST to Graph API: {post_exc}", exc_info=True)
+                return False
             
             if response.status_code in [200, 201, 202, 204]:
                 logger.info(f"Email sent successfully: status_code={response.status_code}")
@@ -169,27 +183,22 @@ class MSGraphEmailService(EmailServiceBase):
             logger.error(f"Error sending notification email: {str(e)}", exc_info=True)
             return False
     
-    async def _post(self, endpoint: str, data: dict) -> httpx.Response:
+    async def _post(self, endpoint: str, data: dict, token=None) -> httpx.Response:
         """Helper method to make a POST request to the Graph API"""
         try:
-            # Get token using client credentials
-            token = self.credential.get_token(GRAPH_SCOPE)
-            
-            # Prepare headers
+            if token is None:
+                logger.info("Acquiring token inside _post (should be passed from send_email)...")
+                token = self.credential.get_token(GRAPH_SCOPE)
             headers = {
                 "Authorization": f"Bearer {token.token}",
                 "Content-Type": "application/json"
             }
-            
-            # Build the URL
             url = f"{GRAPH_ENDPOINT}{endpoint}"
-            
-            logger.debug(f"Sending request to URL: {url}")
-            
-            # Make the request
+            logger.info(f"Making HTTP POST to {url}")
             async with httpx.AsyncClient() as client:
-                return await client.post(url, headers=headers, json=data)
-                
+                response = await client.post(url, headers=headers, json=data)
+            logger.info(f"HTTP POST completed with status {response.status_code}")
+            return response
         except Exception as e:
             logger.error(f"Error in _post method: {str(e)}", exc_info=True)
             raise

@@ -19,40 +19,32 @@ class WeeklyDigestService:
         """Initialize the weekly digest service."""
         pass
 
-    async def get_recent_signals(self, days: int = 7) -> List[Signal]:
+    async def get_recent_signals(self, days: Optional[int] = None, status: Optional[List[Status]] = None, limit: Optional[int] = None) -> List[Signal]:
         """
-        Get signals created in the last specified number of days.
-        
-        Parameters
-        ----------
-        days : int, optional
-            The number of days to look back, defaults to 7 days.
-            
-        Returns
-        -------
-        List[Signal]
-            A list of signals created in the specified period.
+        Get signals filtered by optional days, status, and limit.
+        If no filters are provided, fetch the last 10 draft signals.
         """
-        logger.info(f"Getting signals from the last {days} days")
-        
-        # Calculate date range
+        logger.info(f"Getting signals with filters - days: {days}, status: {status}, limit: {limit}")
+        start_time = datetime.datetime.now()
+        # Set defaults if not provided
+        if status is None:
+            status = [Status.DRAFT]
+        if limit is None:
+            limit = 10
+        # Calculate date range if days is provided
         end_date = datetime.datetime.now()
-        start_date = end_date - timedelta(days=days)
-        start_date_str = start_date.strftime("%Y-%m-%d")
-        
-        logger.info(f"Date range: {start_date_str} to {end_date.strftime('%Y-%m-%d')}")
-        
-        # Create signal filters
+        start_date = end_date - timedelta(days=days) if days is not None else None
+        start_date_str = start_date.strftime("%Y-%m-%d") if start_date else None
+        logger.info(f"Date range: {start_date_str} to {end_date.strftime('%Y-%m-%d') if start_date else 'ALL'}")
         filters = SignalFilters(
-            statuses=[Status.APPROVED],  # Only approved (published) signals
-            # We'll filter by created_at in SQL directly
-            limit=100  # Limit the number of signals
+            statuses=status,
+            per_page=limit
         )
-        
-        # Use a DB connection to fetch signals
+        logger.debug("Opening database connection for signal fetch...")
         async with await connection.get_connection() as conn:
+            logger.debug("Database connection established.")
             async with conn.cursor() as cursor:
-                # Get signals created after start_date
+                logger.debug("Cursor opened. Preparing to execute signal fetch query...")
                 query = f"""
                     SELECT 
                         *, COUNT(*) OVER() AS total_count
@@ -89,24 +81,26 @@ class WeeklyDigestService:
                         s.location = l.location
                     WHERE
                         status = ANY(%(statuses)s)
-                        AND created_at >= %(start_date)s
+                        {f'AND created_at >= %(start_date)s' if start_date_str else ''}
                     ORDER BY
                         created_at DESC
                     LIMIT
                         %(limit)s
                     ;
                 """
-                
-                # Add start_date parameter to the filters
                 filter_params = filters.model_dump()
-                filter_params['start_date'] = start_date_str
-                
+                filter_params['limit'] = limit
+                if start_date_str:
+                    filter_params['start_date'] = start_date_str
+                logger.debug(f"Executing query with params: {filter_params}")
                 await cursor.execute(query, filter_params)
+                logger.debug("Query executed. Fetching rows...")
                 rows = await cursor.fetchall()
-                
-                signals_list = [Signal(**row) for row in rows]
-                
-                logger.info(f"Found {len(signals_list)} signals from the last {days} days")
+                logger.debug(f"Fetched {len(rows)} rows from database.")
+                signals_list = [Signal(**dict(row)) for row in rows]
+                logger.info(f"Found {len(signals_list)} signals with filters - days: {days}, status: {status}, limit: {limit}")
+                elapsed = (datetime.datetime.now() - start_time).total_seconds()
+                logger.info(f"Signal fetch took {elapsed:.2f} seconds.")
                 return signals_list
 
     def generate_email_html(self, signals_list: List[Signal], intro_text: Optional[str] = None) -> str:
@@ -250,7 +244,9 @@ class WeeklyDigestService:
                                       recipients: List[str], 
                                       days: int = 7, 
                                       subject: Optional[str] = None,
-                                      custom_intro: Optional[str] = None) -> bool:
+                                      custom_intro: Optional[str] = None,
+                                      status: Optional[List[Status]] = None,
+                                      limit: Optional[int] = None) -> bool:
         """
         Generate and send a weekly digest email to specified recipients.
         
@@ -264,7 +260,11 @@ class WeeklyDigestService:
             Custom email subject, defaults to standard subject with date.
         custom_intro : Optional[str], optional
             Custom introduction text for the email.
-            
+        status : Optional[List[Status]], optional
+            List of signal statuses to filter by.
+        limit : Optional[int], optional
+            Maximum number of signals to include.
+        
         Returns
         -------
         bool
@@ -273,27 +273,26 @@ class WeeklyDigestService:
         if not recipients:
             logger.error("No recipients specified for weekly digest")
             return False
-            
         logger.info(f"Generating weekly digest email for {len(recipients)} recipients")
-        
-        # Get recent signals
-        signals_list = await self.get_recent_signals(days)
-        
+        step_start = datetime.datetime.now()
+        logger.info("Fetching recent signals for digest...")
+        signals_list = await self.get_recent_signals(days=days, status=status, limit=limit)
+        logger.info(f"Fetched {len(signals_list)} signals for digest.")
+        logger.info(f"Signal fetch step took {(datetime.datetime.now() - step_start).total_seconds():.2f} seconds.")
         if not signals_list:
             logger.warning("No signals found for digest, skipping email send")
             return False
-            
-        # Generate HTML content
+        logger.info("Generating HTML content for digest email...")
+        html_start = datetime.datetime.now()
         html_content = self.generate_email_html(signals_list, custom_intro)
-        
-        # Generate subject
+        logger.info(f"HTML generation took {(datetime.datetime.now() - html_start).total_seconds():.2f} seconds.")
         today = datetime.datetime.now().strftime("%Y-%m-%d")
         email_subject = subject or f"UNDP Futures Weekly Digest - {today}"
-        
-        # Send email
         from .email_factory import create_email_service
+        logger.info("Creating email service...")
         email_service = create_email_service()
-        
+        logger.info(f"Sending weekly digest email to {recipients} with subject {email_subject}")
+        send_start = datetime.datetime.now()
         try:
             success = await email_service.send_email(
                 to_emails=recipients,
@@ -301,14 +300,12 @@ class WeeklyDigestService:
                 content=html_content,
                 content_type="text/html"
             )
-            
+            logger.info(f"Email send step took {(datetime.datetime.now() - send_start).total_seconds():.2f} seconds.")
             if success:
                 logger.info(f"Weekly digest email sent successfully to {len(recipients)} recipients")
             else:
                 logger.error("Failed to send weekly digest email")
-                
             return success
-            
         except Exception as e:
             logger.error(f"Error sending weekly digest email: {e}", exc_info=True)
             return False

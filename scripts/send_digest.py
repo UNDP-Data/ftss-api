@@ -16,6 +16,7 @@ parent_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 sys.path.insert(0, parent_dir)
 
 from src.services.weekly_digest import WeeklyDigestService
+from src.services.weekly_digest import Status
 
 # Set up logging
 logging.basicConfig(
@@ -27,7 +28,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-async def send_weekly_digest(recipients: List[str], days: int = 7, test_mode: bool = False) -> None:
+async def send_weekly_digest(recipients: List[str], days: int = None, test_mode: bool = False, status: list = None, limit: int = None) -> None:
     """
     Send a weekly digest email to the specified recipients.
     
@@ -36,9 +37,13 @@ async def send_weekly_digest(recipients: List[str], days: int = 7, test_mode: bo
     recipients : List[str]
         List of email addresses to send the digest to.
     days : int, optional
-        Number of days to look back for signals, defaults to 7.
+        Number of days to look back for signals, defaults to None.
     test_mode : bool, optional
         If True, adds [TEST] to the subject line.
+    status : list, optional
+        List of signal statuses to filter by, defaults to None.
+    limit : int, optional
+        Maximum number of signals to include, defaults to None.
     """
     logger.info(f"Starting weekly digest email send to {recipients}")
     
@@ -50,11 +55,18 @@ async def send_weekly_digest(recipients: List[str], days: int = 7, test_mode: bo
     if test_mode:
         subject = f"[TEST] {subject}"
     
+    # Map status strings to Status enum if provided
+    status_enum = None
+    if status:
+        status_enum = [Status(s) for s in status]
+    
     # Generate and send the digest
     success = await digest_service.generate_and_send_digest(
         recipients=recipients,
         days=days,
-        subject=subject
+        subject=subject,
+        status=status_enum,
+        limit=limit
     )
     
     if success:
@@ -76,14 +88,28 @@ def main() -> None:
     parser.add_argument(
         "--days",
         type=int,
-        default=7,
-        help="Number of days to look back for signals (default: 7)"
+        default=None,
+        help="Number of days to look back for signals (optional)"
     )
     
     parser.add_argument(
         "--test",
         action="store_true",
         help="Run in test mode (adds [TEST] to the subject line)"
+    )
+    
+    parser.add_argument(
+        "--status",
+        nargs="+",
+        default=None,
+        help="Signal statuses to filter by (e.g. Draft Approved). Optional."
+    )
+    
+    parser.add_argument(
+        "--limit",
+        type=int,
+        default=None,
+        help="Maximum number of signals to include (optional)"
     )
     
     args = parser.parse_args()
@@ -95,7 +121,13 @@ def main() -> None:
             sys.exit(1)
     
     # Run the async function
-    asyncio.run(send_weekly_digest(args.recipients, args.days, args.test))
+    asyncio.run(send_weekly_digest(
+        args.recipients,
+        args.days,
+        args.test,
+        args.status,
+        args.limit
+    ))
 
 if __name__ == "__main__":
     main()

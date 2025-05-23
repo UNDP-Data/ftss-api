@@ -36,7 +36,7 @@ if os.path.exists(env_file):
 else:
     print(f"Warning: {env_file} not found")
 
-# Check if required environment variables are set for enterprise application authentication
+# Check if required environment variables are set for enterprise application authentication 
 required_vars = ["MS_FROM_EMAIL", "TENANT_ID", "CLIENT_ID", "CLIENT_SECRET"]
 missing_vars = [var for var in required_vars if not os.getenv(var)]
 if missing_vars:
