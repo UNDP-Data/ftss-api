@@ -69,6 +69,10 @@ class SignalFilters(BaseFilters):
     bureau: str | None = Field(default=None)
     score: Score | None = Field(default=None)
     unit: str | None = Field(default=None)
+    user_email: str | None = Field(default=None)
+    user_id: int | None = Field(default=None)
+    is_admin: bool = Field(default=False)
+    is_staff: bool = Field(default=False)
 
 
 class TrendFilters(BaseFilters):
