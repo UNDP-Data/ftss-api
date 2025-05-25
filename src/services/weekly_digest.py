@@ -246,7 +246,8 @@ class WeeklyDigestService:
                                       subject: Optional[str] = None,
                                       custom_intro: Optional[str] = None,
                                       status: Optional[List[Status]] = None,
-                                      limit: Optional[int] = None) -> bool:
+                                      limit: Optional[int] = None,
+                                      useUserAccessToken: bool = False) -> bool:
         """
         Generate and send a weekly digest email to specified recipients.
         
@@ -264,6 +265,8 @@ class WeeklyDigestService:
             List of signal statuses to filter by.
         limit : Optional[int], optional
             Maximum number of signals to include.
+        useUserAccessToken : bool, optional
+            Whether to use user access token for email sending.
         
         Returns
         -------
@@ -290,7 +293,7 @@ class WeeklyDigestService:
         email_subject = subject or f"UNDP Futures Weekly Digest - {today}"
         from .email_factory import create_email_service
         logger.info("Creating email service...")
-        email_service = create_email_service()
+        email_service = create_email_service(useUserAccessToken=useUserAccessToken)
         logger.info(f"Sending weekly digest email to {recipients} with subject {email_subject}")
         send_start = datetime.datetime.now()
         try:
@@ -298,7 +301,8 @@ class WeeklyDigestService:
                 to_emails=recipients,
                 subject=email_subject,
                 content=html_content,
-                content_type="text/html"
+                content_type="text/html",
+                useUserAccessToken=useUserAccessToken
             )
             logger.info(f"Email send step took {(datetime.datetime.now() - send_start).total_seconds():.2f} seconds.")
             if success:

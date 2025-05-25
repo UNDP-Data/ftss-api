@@ -81,9 +81,10 @@ class UserAuthEmailService(EmailServiceBase):
         to_emails: List[str],
         subject: str,
         content: str,
-        content_type: str = "text/plain"
+        content_type: str = "text/plain",
+        useUserAccessToken: bool = False
     ) -> bool:
-        """Send an email using Microsoft Graph API with user authentication"""
+        # useUserAccessToken is ignored here, always uses user token
         try:
             logger.info(f"Preparing to send email to {len(to_emails)} recipients")
             
@@ -144,9 +145,10 @@ class UserAuthEmailService(EmailServiceBase):
         to_email: str,
         subject: str,
         template_id: str,
-        dynamic_data: Dict[str, Any]
+        dynamic_data: Dict[str, Any],
+        useUserAccessToken: bool = False
     ) -> bool:
-        """Send a templated notification email using Microsoft Graph API"""
+        # useUserAccessToken is ignored here, always uses user token
         try:
             logger.info(f"Preparing to send notification email to {to_email}")
             logger.debug(f"Using template_id: {template_id}")

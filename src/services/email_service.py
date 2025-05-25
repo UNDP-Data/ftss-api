@@ -17,7 +17,8 @@ class EmailServiceBase(abc.ABC):
         to_emails: List[str],
         subject: str,
         content: str,
-        content_type: str = "text/plain"
+        content_type: str = "text/plain",
+        useUserAccessToken: bool = False
     ) -> bool:
         """Send an email to multiple recipients"""
         pass
@@ -28,7 +29,8 @@ class EmailServiceBase(abc.ABC):
         to_email: str,
         subject: str,
         template_id: str,
-        dynamic_data: Dict[str, Any]
+        dynamic_data: Dict[str, Any],
+        useUserAccessToken: bool = False
     ) -> bool:
         """Send a templated notification email"""
         pass 

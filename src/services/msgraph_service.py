@@ -11,6 +11,7 @@ from azure.identity import ClientSecretCredential
 import httpx
 
 from .email_service import EmailServiceBase
+from .user_auth_service import UserAuthEmailService
 
 logger = logging.getLogger(__name__)
 
@@ -21,7 +22,11 @@ GRAPH_ENDPOINT = "https://graph.microsoft.com/v1.0"
 class MSGraphEmailService(EmailServiceBase):
     """Service class for handling email operations using Microsoft Graph API"""
     
-    def __init__(self):
+    def __init__(self, useUserAccessToken: bool = False):
+        self.useUserAccessToken = useUserAccessToken
+        if useUserAccessToken:
+            self.user_auth_service = UserAuthEmailService()
+            return
         try:
             # Get credentials from environment variables
             tenant_id = os.getenv('TENANT_ID')
@@ -56,8 +61,17 @@ class MSGraphEmailService(EmailServiceBase):
         to_emails: List[str],
         subject: str,
         content: str,
-        content_type: str = "text/plain"
+        content_type: str = "text/plain",
+        useUserAccessToken: bool = False
     ) -> bool:
+        if getattr(self, 'useUserAccessToken', False):
+            return await self.user_auth_service.send_email(
+                to_emails=to_emails,
+                subject=subject,
+                content=content,
+                content_type=content_type,
+                useUserAccessToken=True
+            )
         """Send an email using Microsoft Graph API with Mail.Send permission"""
         try:
             logger.info(f"send_email config: TENANT_ID={os.getenv('TENANT_ID')}, CLIENT_ID={os.getenv('CLIENT_ID')}, FROM_EMAIL={self.from_email}, EMAIL_SERVICE_TYPE={os.getenv('EMAIL_SERVICE_TYPE')}, to_emails={to_emails}, subject={subject}")
@@ -124,8 +138,17 @@ class MSGraphEmailService(EmailServiceBase):
         to_email: str,
         subject: str,
         template_id: str,
-        dynamic_data: Dict[str, Any]
+        dynamic_data: Dict[str, Any],
+        useUserAccessToken: bool = False
     ) -> bool:
+        if getattr(self, 'useUserAccessToken', False):
+            return await self.user_auth_service.send_notification_email(
+                to_email=to_email,
+                subject=subject,
+                template_id=template_id,
+                dynamic_data=dynamic_data,
+                useUserAccessToken=True
+            )
         """Send a templated notification email using Microsoft Graph API"""
         try:
             logger.info(f"Preparing to send notification email to {to_email}")
