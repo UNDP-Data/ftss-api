@@ -13,6 +13,7 @@ __all__ = [
     "read_trend",
     "update_trend",
     "delete_trend",
+    "list_trends",
 ]
 
 
@@ -283,3 +284,39 @@ async def delete_trend(cursor: AsyncCursor, uid: int) -> Trend | None:
     if trend.attachment is not None:
         await storage.delete_image(entity_id=trend.id, folder_name="trends")
     return trend
+
+
+async def list_trends(cursor: AsyncCursor) -> list[Trend]:
+    """
+    Retrieve all trends from the database, including connected signals.
+
+    Parameters
+    ----------
+    cursor : AsyncCursor
+        An async database cursor.
+
+    Returns
+    -------
+    list[Trend]
+        A list of all trends in the database.
+    """
+    query = """
+        SELECT 
+            *
+        FROM
+            trends AS t
+        LEFT OUTER JOIN (
+            SELECT
+                trend_id, array_agg(signal_id) AS connected_signals
+            FROM
+                connections
+            GROUP BY
+                trend_id
+            ) AS c
+        ON
+            t.id = c.trend_id
+        ORDER BY t.id;
+    """
+    await cursor.execute(query)
+    rows = await cursor.fetchall()
+    return [Trend(**row) for row in rows]

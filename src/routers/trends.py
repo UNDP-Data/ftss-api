@@ -17,6 +17,17 @@ from ..entities import Role, Status, Trend, TrendFilters, TrendPage, User
 router = APIRouter(prefix="/trends", tags=["trends"])
 
 
+@router.get("")
+async def get_all_trends(
+    user: User = Depends(authenticate_user),
+    cursor: AsyncCursor = Depends(db.yield_cursor),
+):
+    """
+    Retrieve all trends from the database. Requires authentication.
+    """
+    trends = await db.list_trends(cursor)
+    return trends
+
 @router.get("/search", response_model=TrendPage)
 async def search_trends(
     filters: Annotated[TrendFilters, Query()],
@@ -63,6 +74,8 @@ async def create_trend(
     trend.modified_by = user.email
     trend_id = await db.create_trend(cursor, trend)
     return await db.read_trend(cursor, trend_id)
+
+
 
 
 @router.get("/{uid}", response_model=Trend)
