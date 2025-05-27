@@ -102,23 +102,39 @@ local_origins = [
     "http://127.0.0.1:3000"
 ]
 
+# Production origins for different environments
+production_origins = [
+    "https://signals.data.undp.org",
+    "https://thankful-forest-05a90a303-staging.westeurope.3.azurestaticapps.net",
+    "https://signals-staging.data.undp.org"
+]
+
 # Create a custom middleware class for handling CORS
 class CORSHandlerMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         # Handle OPTIONS preflight requests
         if request.method == "OPTIONS":
-            headers = {
-                "Access-Control-Allow-Origin": "*",
-                "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS, PATCH",
-                "Access-Control-Allow-Headers": "access_token, Authorization, Content-Type, Accept, X-API-Key",
-                "Access-Control-Allow-Credentials": "true",
-                "Access-Control-Max-Age": "600",  # Cache preflight for 10 minutes
-            }
-            
-            # Set specific origin if in local mode
             origin = request.headers.get("origin")
-            if os.environ.get("ENV_MODE") == "local" and origin:
-                headers["Access-Control-Allow-Origin"] = origin
+            
+            # Allow all origins but handle credentials properly
+            if os.environ.get("ENV_MODE") == "local" and origin in local_origins:
+                # Local mode: allow specific origins with credentials
+                headers = {
+                    "Access-Control-Allow-Origin": origin,
+                    "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS, PATCH",
+                    "Access-Control-Allow-Headers": "access_token, Authorization, Content-Type, Accept, X-API-Key",
+                    "Access-Control-Allow-Credentials": "true",
+                    "Access-Control-Max-Age": "600",
+                }
+            else:
+                # Production mode: allow all origins without credentials
+                headers = {
+                    "Access-Control-Allow-Origin": "*",
+                    "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS, PATCH",
+                    "Access-Control-Allow-Headers": "access_token, Authorization, Content-Type, Accept, X-API-Key",
+                    "Access-Control-Allow-Credentials": "false",
+                    "Access-Control-Max-Age": "600",
+                }
                 
             return JSONResponse(content={}, status_code=200, headers=headers)
         
@@ -141,11 +157,11 @@ if os.environ.get("ENV_MODE") == "local":
         expose_headers=["*"],
     )
 else:
-    # Production mode - use more restrictive CORS
+    # Production mode - allow all origins for client flexibility
     app.add_middleware(
         CORSMiddleware,
         allow_origins=["*"],
-        allow_credentials=True,
+        allow_credentials=False,  # Must be False when allow_origins is ["*"]
         allow_methods=["*"],
         allow_headers=["*", "access_token", "Authorization", "Content-Type"],
     )
