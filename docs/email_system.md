@@ -12,7 +12,6 @@ The email system consists of the following components:
    - `EmailServiceBase`: Abstract base class defining the interface for all email services
    - `MSGraphEmailService`: Implementation using Microsoft Graph API with enterprise application authentication
    - `UserAuthEmailService`: Implementation using Azure CLI authentication
-   - `SendGridEmailService`: Alternative implementation using SendGrid
    - `EmailFactory`: Factory pattern for creating the appropriate service based on configuration
 
 2. **Weekly Digest Feature**
@@ -35,7 +34,7 @@ The email system consists of the following components:
 source venv/bin/activate
 
 # Install the required packages
-pip install python-dotenv msgraph-core azure-identity httpx sendgrid
+pip install python-dotenv msgraph-core azure-identity httpx
 ```
 
 ### Environment Variables
@@ -45,7 +44,7 @@ The following environment variables need to be set in your `.env.local` file:
 ```
 # Email Configuration
 MS_FROM_EMAIL=exo.futures.curators@undp.org  # Email that will appear as the sender
-EMAIL_SERVICE_TYPE=ms_graph                  # Authentication type (ms_graph, user_auth, or sendgrid)
+EMAIL_SERVICE_TYPE=ms_graph                  # Authentication type (ms_graph or user_auth)
 
 # Azure Authentication for UNDP Enterprise Application
 TENANT_ID=b3e5db5e-2944-4837-99f5-7488ace54319  # UNDP tenant ID
@@ -78,13 +77,6 @@ Requirements:
 - Azure CLI installed and logged in with `az login`
 - User must have Mail.Send permissions in Microsoft Graph
 
-#### 3. SendGrid Authentication
-
-Alternative email provider if Microsoft Graph is not available.
-
-Requirements:
-- SendGrid API key
-- SendGrid from email address
 
 ### Azure AD Enterprise Application Configuration
 

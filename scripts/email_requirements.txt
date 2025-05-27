@@ -1,3 +1,0 @@
-azure-identity>=1.13.0
-msgraph-core>=0.2.2
-sendgrid>=6.10.0

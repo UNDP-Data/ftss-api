@@ -47,13 +47,6 @@ This document summarizes all the methods we have tried (and considered) for send
 
 ---
 
-## 4. SendGrid or Third-Party SMTP Relay
-
-- **Approach:** Use a third-party SMTP service (e.g., SendGrid) to send as the service account.
-- **Status:** **Not attempted** (would require IT approval and setup).
-- **Blocker:**
-  - May not be allowed by organizational policy.
-
 ---
 
 ## 5. Distribution List/Group Delivery
@@ -75,7 +68,6 @@ This document summarizes all the methods we have tried (and considered) for send
 | MS Graph (App perms)  | Yes        | Blocked               | Need admin to grant permissions      |
 | MS Graph (Delegated)  | No         | Works (manual only)   | Not suitable for automation          |
 | SMTP (O365)           | Yes        | Blocked               | SMTP AUTH disabled for tenant        |
-| SendGrid/3rd-party    | Yes        | Not attempted         | Needs IT approval                    |
 | Distribution List     | Yes        | Ready                 | Blocked by above sending method      |
 
 ---

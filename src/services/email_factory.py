@@ -8,14 +8,12 @@ from typing import Optional
 
 from .email_service import EmailServiceBase
 from .msgraph_service import MSGraphEmailService
-from .sendgrid_service import SendGridEmailService
 from .user_auth_service import UserAuthEmailService
 
 logger = logging.getLogger(__name__)
 
 # Email service types
 MS_GRAPH = "ms_graph"
-SENDGRID = "sendgrid"
 USER_AUTH = "user_auth"
 
 # Default to USER_AUTH with Azure CLI authentication
@@ -35,8 +33,6 @@ def create_email_service(useUserAccessToken: bool = False) -> EmailServiceBase:
     
     if service_type == MS_GRAPH:
         return MSGraphEmailService(useUserAccessToken=useUserAccessToken)
-    elif service_type == SENDGRID:
-        return SendGridEmailService()
     elif service_type == USER_AUTH:
         return UserAuthEmailService()
     else:
