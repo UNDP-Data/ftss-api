@@ -33,8 +33,10 @@ class DigestRequest(BaseModel):
     limit: int | None = None
     test: bool = False
 
-# Initialize email service
-email_service = create_email_service()
+# Lazy email service initialization
+def get_email_service():
+    """Get email service instance. Created on first use to avoid startup errors."""
+    return create_email_service()
 
 @router.post("/send", dependencies=[Depends(require_admin)])
 async def send_email(request: EmailRequest):
@@ -42,6 +44,7 @@ async def send_email(request: EmailRequest):
     Send an email to multiple recipients.
     Only accessible by admin users.
     """
+    email_service = get_email_service()
     success = await email_service.send_email(
         to_emails=request.to_emails,
         subject=request.subject,
@@ -60,6 +63,7 @@ async def send_notification(request: NotificationRequest):
     Send a templated notification email.
     Only accessible by admin users.
     """
+    email_service = get_email_service()
     success = await email_service.send_notification_email(
         to_email=request.to_email,
         subject=request.subject,

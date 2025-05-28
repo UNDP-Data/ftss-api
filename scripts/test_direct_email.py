@@ -102,7 +102,7 @@ async def test_direct_email(to_email: str) -> None:
                 <ul>
                     <li>From Email: {from_email}</li>
                     <li>To Email: {to_email}</li>
-                    <li>Tenant ID: {os.getenv('AZURE_TENANT_ID')}</li>
+                    <li>Tenant ID: {os.getenv('TENANT_ID')}</li>
                 </ul>
             </div>
             

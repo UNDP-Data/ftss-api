@@ -99,7 +99,7 @@ async def test_email(to_email: str) -> None:
                     <li>From Email: {os.getenv('MS_FROM_EMAIL')}</li>
                     <li>User Email: {os.getenv('USER_EMAIL')}</li>
                     <li>To Email: {to_email}</li>
-                    <li>Tenant ID: {os.getenv('AZURE_TENANT_ID')}</li>
+                    <li>Tenant ID: {os.getenv('TENANT_ID')}</li>
                 </ul>
             </div>
             

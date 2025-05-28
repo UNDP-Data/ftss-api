@@ -36,8 +36,9 @@ class MSGraphEmailService(EmailServiceBase):
             self.from_email = os.getenv('MS_FROM_EMAIL')
             logger.info(f"MSGraphEmailService config: TENANT_ID={tenant_id}, CLIENT_ID={client_id}, FROM_EMAIL={self.from_email}, EMAIL_SERVICE_TYPE={service_type}")
             if not all([tenant_id, client_id, client_secret]):
-                logger.error("Missing required environment variables for authentication")
-                raise ValueError("TENANT_ID, CLIENT_ID, and CLIENT_SECRET must be set")
+                logger.warning("Missing required environment variables for MSGraph authentication. Service will not be available.")
+                self.credential = None
+                return
             
             # Use ClientSecretCredential for app authentication
             self.credential = ClientSecretCredential(
@@ -72,6 +73,12 @@ class MSGraphEmailService(EmailServiceBase):
                 content_type=content_type,
                 useUserAccessToken=True
             )
+        
+        # Check if service is properly configured
+        if not hasattr(self, 'credential') or self.credential is None:
+            logger.error("MSGraphEmailService not properly configured - missing credentials")
+            return False
+            
         """Send an email using Microsoft Graph API with Mail.Send permission"""
         try:
             logger.info(f"send_email config: TENANT_ID={os.getenv('TENANT_ID')}, CLIENT_ID={os.getenv('CLIENT_ID')}, FROM_EMAIL={self.from_email}, EMAIL_SERVICE_TYPE={os.getenv('EMAIL_SERVICE_TYPE')}, to_emails={to_emails}, subject={subject}")
@@ -149,6 +156,12 @@ class MSGraphEmailService(EmailServiceBase):
                 dynamic_data=dynamic_data,
                 useUserAccessToken=True
             )
+        
+        # Check if service is properly configured
+        if not hasattr(self, 'credential') or self.credential is None:
+            logger.error("MSGraphEmailService not properly configured - missing credentials")
+            return False
+            
         """Send a templated notification email using Microsoft Graph API"""
         try:
             logger.info(f"Preparing to send notification email to {to_email}")

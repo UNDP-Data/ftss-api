@@ -18,18 +18,25 @@ class GraphDirectAuth:
     def __init__(self):
         self.token = None
         self.token_expires = 0
-        self.tenant_id = os.getenv('AZURE_TENANT_ID')
-        self.client_id = os.getenv('AZURE_CLIENT_ID')
-        self.client_secret = os.getenv('AZURE_CLIENT_SECRET')
+        self.tenant_id = os.getenv('TENANT_ID')
+        self.client_id = os.getenv('CLIENT_ID')
+        self.client_secret = os.getenv('CLIENT_SECRET')
         
         if not all([self.tenant_id, self.client_id, self.client_secret]):
-            raise ValueError("Missing required environment variables for Graph authentication")
+            logger.warning("Missing required environment variables for Graph authentication. Service will not be available.")
+            self.configured = False
+            return
+        
+        self.configured = True
             
         self.token_url = f"https://login.microsoftonline.com/{self.tenant_id}/oauth2/v2.0/token"
         self.graph_url = "https://graph.microsoft.com/v1.0"
         
     async def ensure_token(self) -> str:
         """Ensure we have a valid token, refreshing if necessary"""
+        if not getattr(self, 'configured', False):
+            raise ValueError("GraphDirectAuth not properly configured - missing environment variables")
+            
         current_time = asyncio.get_event_loop().time()
         
         # If token is expired or will expire in the next 5 minutes, refresh it
