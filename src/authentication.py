@@ -11,6 +11,7 @@ import jwt
 from fastapi import Depends, Security
 from fastapi.security import APIKeyHeader
 from psycopg import AsyncCursor
+import psycopg.errors
 
 from . import database as db
 from . import exceptions
@@ -204,5 +205,14 @@ async def authenticate_user(
     
     if (user := await db.read_user_by_email(cursor, email_str)) is None:
         user = User(email=email_str, role=Role.USER, name=name_str)
-        await db.create_user(cursor, user)
+        try:
+            await db.create_user(cursor, user)
+        except psycopg.errors.UniqueViolation:
+            # User was created by another request in the meantime, fetch the existing user
+            logging.info(f"User {email_str} already exists, fetching existing user")
+            user = await db.read_user_by_email(cursor, email_str)
+            if user is None:
+                # This should not happen, but handle it gracefully
+                logging.error(f"Failed to fetch user {email_str} after UniqueViolation")
+                raise exceptions.not_authenticated
     return user

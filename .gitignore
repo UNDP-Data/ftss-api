@@ -149,3 +149,9 @@ Taskfile.yml
 /logs
 webapp_logs.zip
 /.schemas
+app_logs.zip
+/deployments
+/LogFiles
+/.exports
+schema.sql
+schema.dbml

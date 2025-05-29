@@ -22,7 +22,7 @@ load_dotenv()
 setup_logging()
 
 # Get application version
-app_version = os.environ.get("RELEASE_VERSION", "dev")
+app_version = os.environ.get("RELEASE_VERSION", "dev-fixed")
 app_env = os.environ.get("ENVIRONMENT", "development")
 # Override environment setting if in local mode
 if os.environ.get("ENV_MODE") == "local":
