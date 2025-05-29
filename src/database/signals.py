@@ -92,12 +92,7 @@ async def search_signals(cursor: AsyncCursor, filters: SignalFilters) -> SignalP
              AND (%(score)s IS NULL OR score = %(score)s)
              AND (%(unit)s IS NULL OR unit_region = %(unit)s OR unit_name = %(unit)s)
              AND (%(query)s IS NULL OR text_search_field @@ websearch_to_tsquery('english', %(query)s))
-             AND (%(user_email)s IS NOT NULL AND (
-                  private = FALSE OR 
-                  created_by = %(user_email)s OR
-                  %(is_admin)s = TRUE OR
-                  %(is_staff)s = TRUE
-             ))
+             AND private = FALSE
         ORDER BY
             {filters.order_by} {filters.direction}
         OFFSET

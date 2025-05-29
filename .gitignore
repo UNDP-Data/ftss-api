@@ -152,3 +152,6 @@ webapp_logs.zip
 app_logs.zip
 /deployments
 /LogFiles
+/.exports
+schema.sql
+schema.dbml
