@@ -30,7 +30,7 @@ user_group_defaults: dict[str, Any] = {
 # Add models to support user emails in requests
 class UserGroupCreate(BaseModel):
     name: str
-    users: Optional[List[str]] = None
+    user_ids: Optional[List[Union[str, int]]] = None  # Can be either user IDs or email addresses
 
 
 class UserGroupUpdate(BaseModel):
@@ -45,42 +45,45 @@ class UserEmailIdentifier(BaseModel):
     email: str
 
 
-# Helper function to get user ID from email or ID
-async def get_user_id(cursor: AsyncCursor, user_identifier: Union[str, int]) -> Optional[int]:
+# Helper function to process user_ids from request (used by both POST and PUT)
+async def process_user_ids(cursor: AsyncCursor, user_ids: List[Union[str, int]]) -> tuple[List[int], List[tuple]]:
     """
-    Get a user ID from either an email address or ID.
+    Process a list of user identifiers (can be integers or strings).
+    Converts all valid identifiers to integer user IDs.
     
     Parameters
     ----------
     cursor : AsyncCursor
         Database cursor
-    user_identifier : Union[str, int]
-        Either a user email (string) or user ID (int)
+    user_ids : List[Union[str, int]]
+        List of user identifiers (integers or numeric strings)
         
     Returns
     -------
-    Optional[int]
-        User ID if found, None otherwise
+    tuple[List[int], List[tuple]]
+        Tuple of (processed_user_ids, conversions)
+        where conversions is a list of (original_value, converted_id) tuples
     """
-    try:
-        if isinstance(user_identifier, int):
-            # Check if user exists
-            user = await db.read_user(cursor, user_identifier)
-            return user.id if user else None
+    processed_user_ids = []
+    conversions = []
+    
+    for user_id in user_ids:
+        if isinstance(user_id, str):
+            # String, try to convert to int
+            try:
+                numeric_id = int(user_id)
+                processed_user_ids.append(numeric_id)
+                conversions.append((user_id, numeric_id))
+                logger.debug(f"Converted string '{user_id}' to integer {numeric_id}")
+            except (ValueError, TypeError):
+                logger.warning(f"Invalid user ID format: {user_id}")
+                raise HTTPException(status_code=400, detail=f"Invalid user ID format: {user_id}")
         else:
-            # Try to find user by email
-            user = await db.read_user_by_email(cursor, user_identifier)
-            return user.id if user else None
-    except Exception as e:
-        logger.error(f"Error in get_user_id: {str(e)}")
-        bugsnag.notify(
-            e,
-            metadata={
-                "user_identifier": str(user_identifier),
-                "type": type(user_identifier).__name__
-            }
-        )
-        return None
+            # Already an int
+            processed_user_ids.append(user_id)
+            logger.debug(f"Using integer user ID {user_id} as is")
+    
+    return processed_user_ids, conversions
 
 
 @router.get("", response_model=List[UserGroup], **user_group_defaults)
@@ -324,24 +327,21 @@ async def create_user_group(
             admin_ids.append(current_user.id)  # Make current user an admin
             logger.debug(f"Added current user (ID: {current_user.id}) as member and admin")
 
-        # Handle email addresses if provided
-        user_emails_added = []
-        if group_data.users:
-            logger.debug(f"Processing {len(group_data.users)} user emails from request body")
-            for email in group_data.users:
-                logger.debug(f"Looking up user with email: {email}")
-                user = await db.read_user_by_email(cursor, email)
-                if user and user.id and user.id not in user_ids:  # Avoid duplicates
-                    user_ids.append(user.id)
-                    user_emails_added.append(email)
-                    logger.debug(f"Added user {user.id} ({email}) as member")
-                else:
-                    if not user:
-                        logger.warning(f"User with email {email} not found")
-                    elif user.id in user_ids:
-                        logger.debug(f"User {user.id} ({email}) already added to members list")
+        # Process user_ids field
+        if group_data.user_ids:
+            logger.debug(f"Processing {len(group_data.user_ids)} user identifiers from request body")
+            processed_user_ids, conversions = await process_user_ids(cursor, group_data.user_ids)
             
-            logger.debug(f"Added {len(user_emails_added)} users as members from request body: {user_emails_added}")
+            # Add processed user IDs, avoiding duplicates
+            for processed_id in processed_user_ids:
+                if processed_id not in user_ids:
+                    user_ids.append(processed_id)
+                    logger.debug(f"Added user ID {processed_id} as member")
+                else:
+                    logger.debug(f"User ID {processed_id} already in members list")
+            
+            if conversions:
+                logger.debug(f"Converted {len(conversions)} string IDs to integers: {conversions}")
 
         # Handle admin emails if provided
         admin_emails_added = []
@@ -400,8 +400,8 @@ async def create_user_group(
                 },
                 "group_data": {
                     "name": group_data.name,
-                    "users_count": len(group_data.users) if group_data.users else 0,
-                    "users": group_data.users if group_data.users else [],
+                    "user_ids_count": len(group_data.user_ids) if group_data.user_ids else 0,
+                    "user_ids": group_data.user_ids if group_data.user_ids else [],
                     "admins_count": len(admins) if admins else 0,
                     "admins": admins if admins else [],
                     "current_user_id": current_user.id if current_user else None,
@@ -532,42 +532,13 @@ async def update_user_group(
             logger.warning(f"ID mismatch: path ID {group_id} != body ID {group_data.id}")
             raise exceptions.id_mismatch
 
-        # Process user_ids field in case it contains emails instead of integer IDs
-        processed_user_ids = []
-        email_conversions = []
-        
+        # Process user_ids field
         logger.debug(f"Processing {len(group_data.user_ids)} user identifiers...")
-        for user_id in group_data.user_ids:
-            if isinstance(user_id, str):
-                # Check if it's an email (contains @ sign)
-                if '@' in user_id:
-                    # This looks like an email address, try to find the user ID
-                    logger.debug(f"Looking up user by email: {user_id}")
-                    user = await db.read_user_by_email(cursor, user_id)
-                    if user and user.id:
-                        processed_user_ids.append(user.id)
-                        email_conversions.append((user_id, user.id))
-                        logger.debug(f"Converted email {user_id} to user ID {user.id}")
-                    else:
-                        logger.warning(f"User with email {user_id} not found")
-                        raise HTTPException(status_code=404, detail=f"User with email {user_id} not found")
-                else:
-                    # String but not an email, try to convert to int if it's a digit string
-                    try:
-                        numeric_id = int(user_id)
-                        processed_user_ids.append(numeric_id)
-                        logger.debug(f"Converted string '{user_id}' to integer {numeric_id}")
-                    except (ValueError, TypeError):
-                        logger.warning(f"Invalid user ID format: {user_id}")
-                        raise HTTPException(status_code=400, detail=f"Invalid user ID format: {user_id}")
-            else:
-                # Already an int
-                processed_user_ids.append(user_id)
-                logger.debug(f"Using integer user ID {user_id} as is")
-
+        processed_user_ids, conversions = await process_user_ids(cursor, group_data.user_ids)
+        
         logger.debug(f"Processed {len(processed_user_ids)} user IDs: {processed_user_ids}")
-        if email_conversions:
-            logger.debug(f"Converted {len(email_conversions)} emails to user IDs: {email_conversions}")
+        if conversions:
+            logger.debug(f"Converted {len(conversions)} string IDs to integers: {conversions}")
 
         # Log collaborator map details if present
         if group_data.collaborator_map:
