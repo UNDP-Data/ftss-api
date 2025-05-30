@@ -4,7 +4,7 @@ A router for managing user groups.
 
 import logging
 import bugsnag
-from typing import Annotated, List, Optional, Union, Dict
+from typing import Annotated, List, Optional, Union, Dict, Any
 
 from fastapi import APIRouter, Depends, Path, Body, Query, HTTPException, Request
 from psycopg import AsyncCursor
@@ -23,6 +23,9 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/user-groups", tags=["user groups"])
 
+user_group_defaults: dict[str, Any] = {
+    # "dependencies": [Depends(require_admin)],
+}
 
 # Add models to support user emails in requests
 class UserGroupCreate(BaseModel):
@@ -80,7 +83,7 @@ async def get_user_id(cursor: AsyncCursor, user_identifier: Union[str, int]) -> 
         return None
 
 
-@router.get("", response_model=List[UserGroup], dependencies=[Depends(require_admin)])
+@router.get("", response_model=List[UserGroup], **user_group_defaults)
 async def list_user_groups(
     request: Request,
     cursor: AsyncCursor = Depends(db.yield_cursor),
@@ -108,7 +111,7 @@ async def list_user_groups(
         raise
 
 
-@router.get("/me", response_model=List[UserGroup])
+@router.get("/me", response_model=List[UserGroup], **user_group_defaults)
 async def get_my_user_groups(
     request: Request,
     user: User = Depends(authenticate_user),
@@ -179,7 +182,7 @@ async def get_my_user_groups(
         raise
 
 
-@router.get("/me/with-signals", response_model=List[Union[UserGroupWithSignals, UserGroupComplete]])
+@router.get("/me/with-signals", response_model=List[Union[UserGroupWithSignals, UserGroupComplete]], **user_group_defaults)
 async def get_my_user_groups_with_signals(
     request: Request,
     user: User = Depends(authenticate_user),
@@ -284,7 +287,7 @@ async def get_my_user_groups_with_signals(
         raise
 
 
-@router.post("", response_model=Union[UserGroup, UserGroupWithUsers], dependencies=[Depends(require_admin)])
+@router.post("", response_model=Union[UserGroup, UserGroupWithUsers], **user_group_defaults)
 async def create_user_group(
     request: Request,
     group_data: UserGroupCreate,
@@ -409,7 +412,7 @@ async def create_user_group(
         raise
 
 
-@router.get("/{group_id}", response_model=Union[UserGroup, UserGroupWithUsers, UserGroupComplete], dependencies=[Depends(require_admin)])
+@router.get("/{group_id}", response_model=Union[UserGroup, UserGroupWithUsers, UserGroupComplete], **user_group_defaults)
 async def read_user_group(
     request: Request,
     group_id: Annotated[int, Path(description="The ID of the user group to retrieve")],
@@ -501,7 +504,7 @@ async def read_user_group(
         raise
 
 
-@router.put("/{group_id}", response_model=Union[UserGroup, UserGroupWithUsers, UserGroupComplete], dependencies=[Depends(require_admin)])
+@router.put("/{group_id}", response_model=Union[UserGroup, UserGroupWithUsers, UserGroupComplete], **user_group_defaults)
 async def update_user_group(
     request: Request,
     group_id: Annotated[int, Path(description="The ID of the user group to update")],
@@ -628,7 +631,7 @@ async def update_user_group(
         raise
 
 
-@router.delete("/{group_id}", response_model=bool, dependencies=[Depends(require_admin)])
+@router.delete("/{group_id}", response_model=bool, **user_group_defaults)
 async def delete_user_group(
     request: Request,
     group_id: Annotated[int, Path(description="The ID of the user group to delete")],
@@ -671,7 +674,7 @@ async def delete_user_group(
         raise
 
 
-@router.post("/{group_id}/users", response_model=bool, dependencies=[Depends(require_admin)])
+@router.post("/{group_id}/users", response_model=bool, **user_group_defaults)
 async def add_user_to_group_by_email(
     request: Request,
     group_id: Annotated[int, Path(description="The ID of the user group")],
@@ -710,7 +713,7 @@ async def add_user_to_group_by_email(
         raise
 
 
-@router.post("/{group_id}/users/{user_id_or_email}", response_model=bool, dependencies=[Depends(require_admin)])
+@router.post("/{group_id}/users/{user_id_or_email}", response_model=bool, **user_group_defaults)
 async def add_user_to_group(
     request: Request,
     group_id: Annotated[int, Path(description="The ID of the user group")],
@@ -759,7 +762,7 @@ async def add_user_to_group(
         raise
 
 
-@router.delete("/{group_id}/users/{user_id_or_email}", response_model=bool, dependencies=[Depends(require_admin)])
+@router.delete("/{group_id}/users/{user_id_or_email}", response_model=bool, **user_group_defaults)
 async def remove_user_from_group(
     group_id: Annotated[int, Path(description="The ID of the user group")],
     user_id_or_email: Annotated[str, Path(description="The ID or email of the user to remove")],
@@ -788,7 +791,7 @@ async def remove_user_from_group(
     return True
 
 
-@router.post("/{group_id}/signals/{signal_id}", response_model=bool, dependencies=[Depends(require_admin)])
+@router.post("/{group_id}/signals/{signal_id}", response_model=bool, **user_group_defaults)
 async def add_signal_to_group(
     group_id: Annotated[int, Path(description="The ID of the user group")],
     signal_id: Annotated[int, Path(description="The ID of the signal to add")],
@@ -816,7 +819,7 @@ async def add_signal_to_group(
     return True
 
 
-@router.delete("/{group_id}/signals/{signal_id}", response_model=bool, dependencies=[Depends(require_admin)])
+@router.delete("/{group_id}/signals/{signal_id}", response_model=bool, **user_group_defaults)
 async def remove_signal_from_group(
     group_id: Annotated[int, Path(description="The ID of the user group")],
     signal_id: Annotated[int, Path(description="The ID of the signal to remove")],
@@ -847,7 +850,7 @@ async def remove_signal_from_group(
     return True
 
 
-@router.post("/{group_id}/signals/{signal_id}/collaborators", response_model=bool, dependencies=[Depends(require_admin)])
+@router.post("/{group_id}/signals/{signal_id}/collaborators", response_model=bool, **user_group_defaults)
 async def add_collaborator_to_signal_by_email(
     group_id: Annotated[int, Path(description="The ID of the user group")],
     signal_id: Annotated[int, Path(description="The ID of the signal")],
@@ -891,7 +894,7 @@ async def add_collaborator_to_signal_by_email(
     return True
 
 
-@router.post("/{group_id}/signals/{signal_id}/collaborators/{user_id_or_email}", response_model=bool, dependencies=[Depends(require_admin)])
+@router.post("/{group_id}/signals/{signal_id}/collaborators/{user_id_or_email}", response_model=bool, **user_group_defaults)
 async def add_collaborator_to_signal_in_group(
     request: Request,
     group_id: Annotated[int, Path(description="The ID of the user group")],
@@ -1000,7 +1003,7 @@ async def add_collaborator_to_signal_in_group(
         raise
 
 
-@router.delete("/{group_id}/signals/{signal_id}/collaborators/{user_id_or_email}", response_model=bool, dependencies=[Depends(require_admin)])
+@router.delete("/{group_id}/signals/{signal_id}/collaborators/{user_id_or_email}", response_model=bool, **user_group_defaults)
 async def remove_collaborator_from_signal_in_group(
     group_id: Annotated[int, Path(description="The ID of the user group")],
     signal_id: Annotated[int, Path(description="The ID of the signal")],

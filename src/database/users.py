@@ -36,8 +36,8 @@ async def search_users(cursor: AsyncCursor, filters: UserFilters) -> UserPage:
     params = filters.model_dump()
 
     # Only add roles filter if present and non-empty
-    if getattr(filters, "roles", None):
-        where_clauses.append("role = ANY(%(roles)s)")
+    # if getattr(filters, "roles", None):
+    #     where_clauses.append("role = ANY(%(roles)s)")
     
     # Always allow searching by query
     where_clauses.append("(%(query)s IS NULL OR name ~* %(query)s)")
