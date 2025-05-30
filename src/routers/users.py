@@ -17,7 +17,9 @@ from ..entities import Role, User, UserFilters, UserPage
 router = APIRouter(prefix="/users", tags=["users"])
 
 
-@router.get("/search", response_model=UserPage, dependencies=[Depends(require_admin)])
+@router.get("/search", response_model=UserPage, 
+                # dependencies=[Depends(require_admin)]
+            )
 async def search_users(
     filters: Annotated[UserFilters, Query()],
     cursor: AsyncCursor = Depends(db.yield_cursor),
