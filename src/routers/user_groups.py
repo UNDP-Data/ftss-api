@@ -36,19 +36,6 @@ class UserGroupUpdate(BaseModel):
     signal_ids: List[int] = []
     user_ids: List[Union[str, int]] = []  # Can be either user IDs or email addresses
     collaborator_map: Dict[str, List[int]] = {}
-    created_at: Optional[str] = None
-    status: Optional[str] = None
-    created_by: Optional[str] = None
-    created_for: Optional[str] = None
-    modified_at: Optional[str] = None
-    modified_by: Optional[str] = None
-    headline: Optional[str] = None
-    attachment: Optional[str] = None
-    steep_primary: Optional[str] = None
-    steep_secondary: Optional[str] = None
-    signature_primary: Optional[str] = None
-    signature_secondary: Optional[str] = None
-    sdgs: Optional[List[str]] = None
 
 
 class UserEmailIdentifier(BaseModel):
@@ -596,20 +583,7 @@ async def update_user_group(
             name=group_data.name,
             signal_ids=group_data.signal_ids,
             user_ids=processed_user_ids,  # Use the processed user IDs
-            collaborator_map=group_data.collaborator_map,
-            created_at=group_data.created_at,
-            status=group_data.status,
-            created_by=group_data.created_by,
-            created_for=group_data.created_for,
-            modified_at=group_data.modified_at,
-            modified_by=group_data.modified_by,
-            headline=group_data.headline,
-            attachment=group_data.attachment,
-            steep_primary=group_data.steep_primary,
-            steep_secondary=group_data.steep_secondary,
-            signature_primary=group_data.signature_primary,
-            signature_secondary=group_data.signature_secondary,
-            sdgs=group_data.sdgs
+            collaborator_map=group_data.collaborator_map
         )
         logger.debug("UserGroup entity created successfully")
 

@@ -32,14 +32,25 @@ async def search_users(cursor: AsyncCursor, filters: UserFilters) -> UserPage:
     page : UserPage
         Paginated search results for users.
     """
-    query = """
+    where_clauses = []
+    params = filters.model_dump()
+
+    # Only add roles filter if present and non-empty
+    if getattr(filters, "roles", None):
+        where_clauses.append("role = ANY(%(roles)s)")
+    
+    # Always allow searching by query
+    where_clauses.append("(%(query)s IS NULL OR name ~* %(query)s)")
+
+    where_sql = " AND ".join(where_clauses) if where_clauses else "TRUE"
+
+    query = f"""
         SELECT
             *, COUNT(*) OVER() AS total_count
         FROM
             users
         WHERE
-            role = ANY(%(roles)s)
-            AND (%(query)s IS NULL OR name ~* %(query)s)
+            {where_sql}
         ORDER BY
             name
         OFFSET
@@ -48,7 +59,7 @@ async def search_users(cursor: AsyncCursor, filters: UserFilters) -> UserPage:
             %(limit)s
         ;
     """
-    await cursor.execute(query, filters.model_dump())
+    await cursor.execute(query, params)
     rows = await cursor.fetchall()
     page = UserPage.from_search(rows, filters)
     return page
