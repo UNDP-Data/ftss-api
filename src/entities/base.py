@@ -33,6 +33,8 @@ class BaseMetadata(BaseModel):
     @classmethod
     def format_created_at(cls, value):
         """(De)serialisation function for `created_at` timestamp."""
+        if value is None:
+            return timestamp()  # Use default timestamp if None
         if isinstance(value, str):
             return value
         return value.isoformat()
@@ -103,6 +105,8 @@ class BaseEntity(BaseMetadata):
     @classmethod
     def format_modified_at(cls, value):
         """(De)serialisation function for `modified_at` timestamp."""
+        if value is None:
+            return timestamp()  # Use default timestamp if None
         if isinstance(value, str):
             return value
         return value.isoformat()
